@@ -1,46 +1,36 @@
-// cardapio_sw.js - versão corrigida
-// Atualize a versão do cache quando quiser forçar atualização (ex: 'cardapio-cache-v4' no futuro)
-const CACHE_NAME = 'cardapio-cache-v3';
+// cardapio_sw.js - versão para GitHub Pages (caminhos relativos)
+// Atualize CACHE_NAME quando fizer mudanças para forçar atualização
+const CACHE_NAME = 'cardapio-cache-v4';
 
 const URLS_TO_CACHE = [
-  '/',                         // garante a página inicial
-  '/index.html',               // caso exista index.html
-  '/cardapio_casa_pwa.html',   // seu HTML específico (mantive conforme seu arquivo)
-  '/cardapio_manifest.json',   // manifest (ajuste o nome se mudou)
-  '/cardapio_sw.js',           // opcional: cache do próprio SW
-  '/icons/icon-192.png',
-  '/icons/icon-512.png'
+  './',
+  'index.html',
+  'cardapio_casa_pwa.html',
+  'cardapio_manifest.json',
+  'cardapio_sw.js',
+  'icons/icon-192.png',
+  'icons/icon-512.png'
 ];
 
-// Install: cria/atualiza cache
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => cache.addAll(URLS_TO_CACHE))
-      .then(() => self.skipWaiting()) // força o SW a pular para 'installed'
+      .then(() => self.skipWaiting())
   );
 });
 
-// Activate: remove caches antigos que não batem com CACHE_NAME
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys => Promise.all(
-      keys.map(key => {
-        if (key !== CACHE_NAME) {
-          return caches.delete(key);
-        }
-        // se for igual, retorna undefined (ok)
-      })
+      keys.map(key => (key !== CACHE_NAME) ? caches.delete(key) : Promise.resolve())
     ))
-    .then(() => self.clients.claim()) // passa a controlar as páginas imediatamente
+    .then(() => self.clients.claim())
   );
 });
 
-// Fetch: responde do cache primeiro, se não busca na rede
 self.addEventListener('fetch', event => {
   event.respondWith(
-    caches.match(event.request).then(response => {
-      return response || fetch(event.request);
-    })
+    caches.match(event.request).then(response => response || fetch(event.request))
   );
 });

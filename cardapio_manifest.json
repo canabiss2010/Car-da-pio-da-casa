@@ -1,21 +1,20 @@
 {
   "name": "Cardápio da Casa",
   "short_name": "Cardápio",
-  "start_url": "./index.html",
+  "start_url": "./cardapio_casa_pwa.html",
   "display": "standalone",
-  "background_color": "#008000",
-  "theme_color": "#008000",
+  "background_color": "#F7F6F2",
+  "theme_color": "#1F6F3B",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "icon-512.png",
+      "src": "icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
   ]
 }
-
