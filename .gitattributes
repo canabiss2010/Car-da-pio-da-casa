@@ -1,16 +1,4 @@
-# .gitattributes — normaliza finais de linha e marca binários
 * text=auto
-
-# Força LF em arquivos web (opcional, bom pra evitar surpresas)
-*.html text eol=lf
-*.htm  text eol=lf
-*.css  text eol=lf
-*.js   text eol=lf
-*.json text eol=lf
-
-# Arquivos binários (não devem ser convertidos)
 *.png binary
 *.jpg binary
 *.jpeg binary
-*.gif binary
-*.ico binary

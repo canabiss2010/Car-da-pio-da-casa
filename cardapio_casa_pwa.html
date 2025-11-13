@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>CardápioCasa — PWA</title>
+  <link rel="manifest" href="cardapio_manifest.json">
+  <meta name="theme-color" content="#1F6F3B"/>
+  <style>
+    :root{
+      --bg:#F7F6F2;
+      --card:#fff;
+      --accent:#1F6F3B;
+      --accent-2:#2ea47a;
+      --muted:#6b6b6b;
+      --radius:14px;
+      --maxw:420px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;color:#071019;
+      display:flex;justify-content:center;padding:18px;
+    }
+    .wrap{width:100%;max-width:var(--maxw)}
+    header{display:flex;align-items:center;gap:12px;padding:14px;border-radius:14px;background:linear-gradient(180deg,rgba(31,111,59,0.06),#fff);border:1px solid rgba(31,111,59,0.05)}
+    .logo{width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:20px}
+    h1{margin:0;font-family:Oswald, sans-serif;color:var(--accent);font-size:20px}
+    .subtitle{margin:0;font-size:13px;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+    .block{background:var(--card);border-radius:12px;padding:12px;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;min-height:92px;border:1px solid rgba(8,20,25,0.04);box-shadow:0 8px 20px rgba(8,20,25,0.03);cursor:pointer}
+    .block h3{margin:0;font-size:15px;color:var(--accent);font-family:Oswald, sans-serif}
+    .block p{margin:8px 0 0 0;color:var(--muted);font-size:13px}
+    .full{grid-column:1/-1}
+    .alerts{margin-top:12px;background:linear-gradient(180deg,#fff,#fbfffb);border-radius:12px;padding:12px;border:1px solid rgba(31,111,59,0.06);min-height:64px}
+    .small{font-size:12px;color:var(--muted)}
+    /* modal */
+    .modal-back{position:fixed;inset:0;background:rgba(2,6,23,0.4);display:none;align-items:center;justify-content:center;padding:18px;z-index:60}
+    .modal{width:100%;max-width:520px;background:#fff;border-radius:14px;padding:14px;box-shadow:0 20px 60px rgba(2,6,23,0.3);max-height:90vh;overflow:auto}
+    .modal .row{display:flex;gap:8px}
+    input,textarea,select{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(8,20,25,0.06);margin-top:8px;font-size:14px}
+    button{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#fff;padding:10px 12px;border-radius:10px;border:0;font-weight:700;cursor:pointer}
+    .btn-ghost{background:transparent;border:1px solid rgba(8,20,25,0.06);padding:9px;border-radius:10px;color:var(--muted);cursor:pointer}
+    .list{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+    .item{display:flex;justify-content:space-between;padding:10px;border-radius:10px;border:1px solid rgba(8,20,25,0.04);background:linear-gradient(180deg,#fff,#fbfffb)}
+    footer{text-align:center;margin-top:12px;font-size:12px;color:var(--muted)}
+    @media(min-width:560px){ .grid{grid-template-columns:1fr 1fr 1fr 1fr} .block{min-height:110px} .wrap{max-width:980px} }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">CC</div>
+      <div>
+        <h1>CardápioCasa</h1>
+        <p class="subtitle">Planejamento rápido para sua casa</p>
+      </div>
+    </header>
+
+    <div class="grid" id="mainGrid">
+      <div class="block" id="b-inv" data-key="inv">
+        <h3>Dispensa</h3>
+        <p>Adicionar e visualizar seu estoque</p>
+      </div>
+      <div class="block" id="b-rec" data-key="rec">
+        <h3>Receitas</h3>
+        <p>Cadastrar e priorizar receitas</p>
+      </div>
+      <div class="block" id="b-create" data-key="create">
+        <h3>Criar Plano</h3>
+        <p>Gerar plano automático</p>
+      </div>
+      <div class="block" id="b-current" data-key="current">
+        <h3>Plano Atual</h3>
+        <p>Ver plano gerado</p>
+      </div>
+    </div>
+
+    <div class="alerts full" id="alertsBox">
+      <strong style="color:var(--accent)">Avisos</strong>
+      <div id="alerts" style="margin-top:8px" class="small">Nenhum aviso por enquanto.</div>
+    </div>
+
+    <footer>Toque nos blocos para abrir cada área. App pronto como PWA (instalável).</footer>
+  </div>
+
+  <!-- modal container -->
+  <div class="modal-back" id="modalBack" role="dialog" aria-modal="true">
+    <div class="modal" id="modalContent"></div>
+  </div>
+
+<script>
+// Core app logic (v6 visual PWA): four blocks that open details; densities preloaded silently.
+// Data stored in localStorage keys cc_inv_pwa, cc_rec_pwa
+const qs = s => document.querySelector(s);
+
+const densities = {
+  "água":1,"agua":1,"leite":1,"oleo":0.92,"óleo":0.92,"acucar":0.85,"açúcar":0.85,"farinha":0.53,"farinha de trigo":0.53,
+  "arroz":0.85,"feijao":0.7,"carne moida":0.95,"carne moída":0.95,"batata":0.65,"tomate":0.95,"aipim":0.6,"mandioquinha":0.6,
+  "óleo vegetal":0.92,"manteiga":0.96,"creme de leite":1.01,"iogurte":1.03,"queijo ralado":0.32,"açúcar cristal":0.85,
+  "acucar cristal":0.85,"cafe moido":0.5,"sal":1.2,"cebola":0.64,"alho":0.6,"atum":0.8,"milho":0.72,"ervilha":0.72
+};
+
+// basic defaults
+const defaults = {
+  conv: { kg_to_g:1000, g_to_mg:1000, l_to_ml:1000, cup_ml:240, tbsp_ml:15, tsp_ml:5 }
+};
+
+// storage
+let inventory = JSON.parse(localStorage.getItem('cc_inv_pwa')||'[]');
+let recipes = JSON.parse(localStorage.getItem('cc_rec_pwa')||'[]');
+let plan = JSON.parse(localStorage.getItem('cc_plan_pwa')||'[]');
+
+// UI hooks
+const modalBack = qs('#modalBack');
+const modalContent = qs('#modalContent');
+const alertsEl = qs('#alerts');
+
+function saveAll(){
+  localStorage.setItem('cc_inv_pwa', JSON.stringify(inventory));
+  localStorage.setItem('cc_rec_pwa', JSON.stringify(recipes));
+  localStorage.setItem('cc_plan_pwa', JSON.stringify(plan));
+}
+
+// helpers
+function normalizeUnit(u){
+  if(!u) return 'un';
+  const key = u.toString().toLowerCase().replace(/\s+/g,'').replace(/[.,]/g,'').trim();
+  const map = {'kg':'kg','kilo':'kg','g':'g','grama':'g','l':'l','litro':'l','ml':'ml','xic':'xic','xicara':'xic','xícara':'xic','cs':'cs','colher_sopa':'cs','ch':'ch','colher_cha':'ch','un':'un','lat':'lat'};
+  return map[key]||key;
+}
+function parseLine(line){
+  const parts = line.split(',').map(s=>s.trim()).filter(Boolean);
+  if(parts.length===0) return null;
+  if(parts.length===1) return {name:parts[0].toLowerCase(), qty:1, unit:'un'};
+  return {name:parts[0].toLowerCase(), qty:parseFloat(parts[1])||0, unit:normalizeUnit(parts[2]||'un')};
+}
+function toGrams(qty, unit, name){
+  if(qty==null || isNaN(qty)) return null;
+  const u = normalizeUnit(unit||'un');
+  const c = defaults.conv;
+  if(u==='g') return qty;
+  if(u==='kg') return qty * c.kg_to_g;
+  if(u==='mg') return qty / c.g_to_mg;
+  if(u==='ml'){ const d = densityFor(name); return d!=null? qty * d : null; }
+  if(u==='l'){ const ml = qty * c.l_to_ml; const d = densityFor(name); return d!=null? ml * d : null; }
+  if(u==='xic'){ const ml = qty * c.cup_ml; const d = densityFor(name); return d!=null? ml * d : null; }
+  if(u==='cs'){ const ml = qty * c.tbsp_ml; const d = densityFor(name); return d!=null? ml * d : null; }
+  if(u==='ch'){ const ml = qty * c.tsp_ml; const d = densityFor(name); return d!=null? ml * d : null; }
+  return null;
+}
+function densityFor(name){
+  if(!name) return null;
+  const k = name.toLowerCase().trim();
+  if(densities[k]!=null) return densities[k];
+  const alt = k.replace(/\s+s$/,'');
+  if(densities[alt]!=null) return densities[alt];
+  return null;
+}
+
+// Alerts management
+function setAlert(text, level='info'){
+  const msg = {text, level, time: new Date().toISOString()};
+  // simple push to alerts area (show latest)
+  const node = document.createElement('div'); node.textContent = `${text}`; node.style.marginTop='6px';
+  if(level==='error') node.style.color='crimson';
+  else if(level==='warn') node.style.color='#b47c00';
+  else node.style.color='#134e3a';
+  alertsEl.prepend(node);
+}
+
+// Modal helpers
+function openModal(title, contentHTML){
+  modalContent.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">${title}</h2><button id="closeModal" class="btn-ghost">Fechar</button></div><div style="margin-top:12px">${contentHTML}</div>`;
+  modalBack.style.display = 'flex';
+  qs('#closeModal').addEventListener('click', ()=> closeModal());
+}
+function closeModal(){ modalBack.style.display='none'; modalContent.innerHTML=''; }
+
+// Build modal UIs for each block
+function showInventory(){
+  const html = `
+    <div style="display:flex;gap:8px"><input id="m_invLine" placeholder="ex: arroz,2,kg" /><button id="m_addInv" class="btn-ghost">Adicionar</button></div>
+    <label style="margin-top:8px">Cole várias linhas</label>
+    <textarea id="m_invBulk" rows="6" placeholder="arroz,2,kg\nleite,2,l"></textarea>
+    <div style="display:flex;gap:8px;margin-top:8px"><button id="m_paste" class="btn">Adicionar todas</button><button id="m_clearInv" class="btn-ghost">Limpar</button></div>
+    <div id="m_invList" class="list" style="margin-top:12px"></div>
+  `;
+  openModal('Dispensa', html);
+  // attach handlers after short delay
+  setTimeout(()=> {
+    const render = ()=> {
+      const el = qs('#m_invList'); el.innerHTML='';
+      if(inventory.length===0) el.innerHTML='<div class="small">Sem itens</div>';
+      inventory.forEach((it,idx)=>{
+        const node = document.createElement('div'); node.className='item';
+        node.innerHTML = `<div style="max-width:70%"><strong style="text-transform:capitalize">${it.name}</strong><div class="small">${it.qty} ${it.unit}</div></div><div><button data-idx="${idx}" class="btn-ghost">Remover</button></div>`;
+        el.appendChild(node);
+      });
+      el.querySelectorAll('button[data-idx]').forEach(b=> b.addEventListener('click', ()=> { const i=Number(b.dataset.idx); inventory.splice(i,1); saveAll(); render(); setAlert('Item removido: '+b.previousSibling); }));
+    };
+    qs('#m_addInv').addEventListener('click', ()=> {
+      const v = qs('#m_invLine').value.trim(); if(!v) return alert('Digite: nome,quantidade,unidade');
+      const p = parseLine(v); if(!p) return alert('linha inválida');
+      inventory.push(p); saveAll(); render(); qs('#m_invLine').value=''; setAlert('Item adicionado: '+p.name);
+    });
+    qs('#m_paste').addEventListener('click', ()=> {
+      const text = qs('#m_invBulk').value.trim(); if(!text) return alert('Cole as linhas');
+      const lines = text.split('\n').map(l=>l.trim()).filter(Boolean); let added=0;
+      lines.forEach(l=>{ const p=parseLine(l); if(p){ inventory.push(p); added++; } });
+      saveAll(); render(); qs('#m_invBulk').value=''; setAlert('Adicionados em lote: '+added);
+    });
+    qs('#m_clearInv').addEventListener('click', ()=> { if(!confirm('Limpar inventário?')) return; inventory=[]; saveAll(); render(); setAlert('Inventário limpo'); });
+    render();
+  },50);
+}
+
+function showRecipes(){
+  const html = `
+    <label>Nome</label><input id="m_recName" placeholder="Carne moída e batata" />
+    <label>Rende (person-meals)</label><input id="m_recServes" type="number" value="8" />
+    <label>Ingredientes (uma por linha: nome,quantidade,unidade)</label><textarea id="m_recIngredients" rows="6" placeholder="carne moida,800,g\nbatata,1.5,kg"></textarea>
+    <label>Prioridade (1-10)</label><input id="m_recPriority" type="number" value="7" min="1" max="10" />
+    <label>Dias que dura o preparo</label><input id="m_recDays" type="number" value="2" min="1" max="5" />
+    <div style="display:flex;gap:8px;margin-top:8px"><button id="m_addRec" class="btn">Adicionar</button><button id="m_clearRec" class="btn-ghost">Limpar receitas</button></div>
+    <div id="m_recList" class="list" style="margin-top:12px"></div>
+  `;
+  openModal('Receitas', html);
+  setTimeout(()=> {
+    const render = ()=> {
+      const el = qs('#m_recList'); el.innerHTML='';
+      if(recipes.length===0) el.innerHTML='<div class="small">Sem receitas</div>';
+      recipes.forEach((r,idx)=>{
+        const node = document.createElement('div'); node.className='item';
+        node.innerHTML = `<div style="max-width:70%"><strong style="text-transform:capitalize">${r.name}</strong><div class="small">Rende ${r.serves} · Dura ${r.days} dia(s) · P${r.priority}</div></div><div><button data-idx="${idx}" class="btn-ghost">Remover</button></div>`;
+        el.appendChild(node);
+      });
+      el.querySelectorAll('button[data-idx]').forEach(b=> b.addEventListener('click', ()=> { recipes.splice(Number(b.dataset.idx),1); saveAll(); render(); setAlert('Receita removida'); }));
+    };
+    qs('#m_addRec').addEventListener('click', ()=> {
+      const name = qs('#m_recName').value.trim(); if(!name) return alert('Nome da receita');
+      const serves = parseInt(qs('#m_recServes').value)||1;
+      const lines = qs('#m_recIngredients').value.split('\n').map(l=>l.trim()).filter(Boolean);
+      if(!lines.length) return alert('Adicione ingredientes');
+      const priority = Math.max(1, Math.min(10, parseInt(qs('#m_recPriority').value)||5));
+      const days = Math.max(1, Math.min(5, parseInt(qs('#m_recDays').value)||2));
+      const ingredients = lines.map(l=>{ const p=parseLine(l); return {name:p.name, qty:p.qty, unit:p.unit}; });
+      recipes.push({name, serves, ingredients, priority, days});
+      saveAll(); render(); qs('#m_recName').value=''; qs('#m_recIngredients').value=''; setAlert('Receita adicionada: '+name);
+    });
+    qs('#m_clearRec').addEventListener('click', ()=> { if(!confirm('Limpar receitas?')) return; recipes=[]; saveAll(); render(); setAlert('Receitas limpas'); });
+    render();
+  },50);
+}
+
+function showCreatePlan(){
+  const html = `
+    <div class="small">Ajuste as configurações e gere um plano automático. O sistema usa prioridades e durações (sobras).</div>
+    <label>Pessoas</label><input id="m_people" type="number" value="4" />
+    <label>Dias</label><input id="m_days" type="number" value="7" />
+    <label>Refeições por dia</label><select id="m_meals"><option value="2">2</option><option value="3">3</option><option value="1">1</option></select>
+    <div style="display:flex;gap:8px;margin-top:8px"><button id="m_genPlan" class="btn">Gerar Plano</button><button id="m_sim" class="btn-ghost">Simular (sem consumir estoque)</button></div>
+    <div id="m_planPreview" style="margin-top:12px"></div>
+  `;
+  openModal('Criar Plano', html);
+  setTimeout(()=> {
+    const renderPreview = (p)=> {
+      const el = qs('#m_planPreview'); el.innerHTML='';
+      if(!p.length){ el.innerHTML='<div class="small">Sem plano</div>'; return; }
+      p.forEach((day,idx)=>{
+        const node = document.createElement('div'); node.style.borderTop='1px solid rgba(8,20,25,0.04)'; node.style.padding='8px 0';
+        node.innerHTML = `<strong>Dia ${idx+1}</strong>`;
+        day.forEach((meal,i)=> {
+          const m = document.createElement('div'); m.style.marginTop='6px';
+          m.innerHTML = `<div style="display:flex;justify-content:space-between"><div><strong>Refeição ${i+1}: ${meal.name}</strong><div class="small">${meal.suggested? 'Sugestão (faltam ingredientes)':'Agendado'}</div></div></div>`;
+          node.appendChild(m);
+        });
+        el.appendChild(node);
+      });
+    };
+
+    qs('#m_genPlan').addEventListener('click', ()=> {
+      const people = parseInt(qs('#m_people').value)||1;
+      const days = parseInt(qs('#m_days').value)||7;
+      const mealsPerDay = parseInt(qs('#m_meals').value)||2;
+      if(recipes.length===0) return alert('Adicione receitas primeiro');
+      // simple planner reusing earlier logic
+      let workingInv = inventory.map(x=>({...x}));
+      const newPlan = [];
+      let activePrepared = [];
+      for(let d=0; d<days; d++){
+        const day = [];
+        for(let m=0; m<mealsPerDay; m++){
+          let assigned = null;
+          if(activePrepared.length){
+            for(let i=0;i<activePrepared.length;i++){
+              const p = activePrepared[i];
+              if(p.remainingSlots>0){ assigned = {name:p.recipe.name, suggested:false, recipe:p.recipe}; p.remainingSlots -=1; break; }
+            }
+            activePrepared = activePrepared.filter(p=>p.remainingSlots>0);
+          }
+          if(!assigned){
+            // pick candidate by priority that can be cooked to cover its days
+            let candidate=null;
+            for(const r of recipes){
+              const totalPersonMeals = people * r.days;
+              const cookingsNeeded = Math.ceil(totalPersonMeals / r.serves);
+              if(canCookForSlots(r, workingInv, cookingsNeeded)) { candidate = {r,cookingsNeeded}; break; }
+            }
+            if(candidate){
+              workingInv = consumeCookingsInv(candidate.r, workingInv, candidate.cookingsNeeded);
+              const remainingSlots = candidate.r.days -1;
+              if(remainingSlots>0) activePrepared.push({recipe:candidate.r, remainingSlots});
+              assigned = {name:candidate.r.name, suggested:false, recipe:candidate.r};
+            } else {
+              // fallback: pick best shortage
+              let best=null; let bestShort=Infinity;
+              for(const r of recipes){
+                const totalPersonMeals = people * r.days;
+                const cookingsNeeded = Math.ceil(totalPersonMeals / r.serves);
+                let shortage=0;
+                r.ingredients.forEach(ing=>{
+                  const needTotalQty = ing.qty * cookingsNeeded;
+                  const needG = toGrams(needTotalQty, ing.unit, ing.name);
+                  if(needG!=null){
+                    const found = workingInv.find(x=>x.name.toLowerCase()===ing.name.toLowerCase());
+                    const have = found? toGrams(found.qty, found.unit, found.name) : null;
+                    if(needG!=null && have!=null) shortage += Math.max(0, needG - have);
+                    else if(needG!=null && have==null) shortage += needG;
+                    else {
+                      const haveQty = found?found.qty:0;
+                      shortage += Math.max(0, needTotalQty - haveQty);
+                    }
+                  });
+                });
+                if(shortage < bestShort){ bestShort = shortage; best={r,cookingsNeeded}; }
+              }
+              if(best){ workingInv = consumeCookingsInv(best.r, workingInv, best.cookingsNeeded); assigned = {name:best.r.name, suggested:true, recipe:best.r}; }
+              else assigned = {name:'Sem sugestão', suggested:true};
+            }
+          }
+          day.push(assigned);
+        }
+        newPlan.push(day);
+      }
+      // commit plan and save (consumes actual inventory)
+      plan = newPlan;
+      inventory = workingInv;
+      saveAll();
+      renderPreview(plan);
+      setAlert('Plano gerado e estoque atualizado');
+      renderMainAlerts();
+    });
+
+    qs('#m_sim').addEventListener('click', ()=> {
+      // simulate without consuming inventory
+      const people = parseInt(qs('#m_people').value)||1;
+      const days = parseInt(qs('#m_days').value)||7;
+      const mealsPerDay = parseInt(qs('#m_meals').value)||2;
+      if(recipes.length===0) return alert('Adicione receitas primeiro');
+      let workingInv = inventory.map(x=>({...x}));
+      const newPlan = [];
+      let activePrepared = [];
+      for(let d=0; d<days; d++){
+        const day = [];
+        for(let m=0; m<mealsPerDay; m++){
+          let assigned = null;
+          if(activePrepared.length){
+            for(let i=0;i<activePrepared.length;i++){
+              const p = activePrepared[i];
+              if(p.remainingSlots>0){ assigned = {name:p.recipe.name, suggested:false, recipe:p.recipe}; p.remainingSlots -=1; break; }
+            }
+            activePrepared = activePrepared.filter(p=>p.remainingSlots>0);
+          }
+          if(!assigned){
+            let candidate=null;
+            for(const r of recipes){
+              const totalPersonMeals = people * r.days;
+              const cookingsNeeded = Math.ceil(totalPersonMeals / r.serves);
+              if(canCookForSlots(r, workingInv, cookingsNeeded)) { candidate = {r,cookingsNeeded}; break; }
+            }
+            if(candidate){
+              // do NOT consume inv
+              const remainingSlots = candidate.r.days -1;
+              if(remainingSlots>0) activePrepared.push({recipe:candidate.r, remainingSlots});
+              assigned = {name:candidate.r.name, suggested:false, recipe:candidate.r};
+            } else {
+              assigned = {name:'Sem sugestão', suggested:true};
+            }
+          }
+          day.push(assigned);
+        }
+        newPlan.push(day);
+      }
+      renderPreview(newPlan);
+      setAlert('Simulação pronta (estoque não consumido)');
+    });
+
+  },50);
+}
+
+function showCurrentPlan(){
+  const html = `<div id="m_currentList" class="list"></div><div style="display:flex;gap:8px;margin-top:8px"><button id="m_clearPlan" class="btn-ghost">Limpar plano</button><button id="m_exportPlan" class="btn-ghost">Exportar plano</button></div>`;
+  openModal('Plano Atual', html);
+  setTimeout(()=> {
+    const render = ()=> {
+      const el = qs('#m_currentList'); el.innerHTML='';
+      if(!plan.length) el.innerHTML='<div class="small">Sem plano gerado</div>';
+      plan.forEach((day,idx)=>{
+        const node = document.createElement('div'); node.style.borderTop='1px solid rgba(8,20,25,0.04)'; node.style.padding='8px 0';
+        node.innerHTML = `<strong>Dia ${idx+1}</strong>`;
+        day.forEach((meal,i)=> {
+          const m = document.createElement('div'); m.style.marginTop='6px';
+          m.innerHTML = `<div style="display:flex;justify-content:space-between"><div><strong>Refeição ${i+1}: ${meal.name}</strong><div class="small">${meal.suggested? 'Sugestão — faltam ingredientes':'Agendado'}</div></div></div>`;
+          node.appendChild(m);
+        });
+        el.appendChild(node);
+      });
+    };
+    qs('#m_clearPlan').addEventListener('click', ()=> { if(!confirm('Limpar plano atual?')) return; plan=[]; saveAll(); render(); setAlert('Plano limpo'); renderMainAlerts(); });
+    qs('#m_exportPlan').addEventListener('click', ()=> { const blob = new Blob([JSON.stringify(plan,null,2)],{type:'application/json'}); const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='cardapio_plan.json'; a.click(); URL.revokeObjectURL(url); setAlert('Plano exportado'); });
+    render();
+  },50);
+}
+
+// utility functions reused
+function canCookForSlots(rec, invCopy, cookingsNeeded){
+  for(const ing of rec.ingredients){
+    const needTotalQty = ing.qty * cookingsNeeded;
+    const needG = toGrams(needTotalQty, ing.unit, ing.name);
+    if(needG!=null){
+      const found = invCopy.find(x=>x.name.toLowerCase()===ing.name.toLowerCase());
+      const haveG = found? toGrams(found.qty, found.unit, found.name) : null;
+      if(haveG==null || haveG + 1e-9 < needG) return false;
+    } else {
+      const found = invCopy.find(x=>x.name.toLowerCase()===ing.name.toLowerCase() && x.unit === ing.unit);
+      if(!found || found.qty + 1e-9 < needTotalQty) return false;
+    }
+  }
+  return true;
+}
+function consumeCookingsInv(rec, invCopy, cookingsNeeded){
+  const copy = invCopy.map(x=>({...x}));
+  for(const ing of rec.ingredients){
+    const needTotalQty = ing.qty * cookingsNeeded;
+    const needG = toGrams(needTotalQty, ing.unit, ing.name);
+    if(needG!=null){
+      const idx = copy.findIndex(x=>x.name.toLowerCase()===ing.name.toLowerCase());
+      if(idx>=0){
+        const invItem = copy[idx];
+        const invGrams = toGrams(invItem.qty, invItem.unit, invItem.name);
+        if(invGrams==null){
+          if(invItem.unit===ing.unit) invItem.qty = Math.max(0, invItem.qty - needTotalQty);
+        } else {
+          let remainingGrams = Math.max(0, invGrams - needG);
+          if(invItem.unit==='g') invItem.qty = remainingGrams;
+          else if(invItem.unit==='kg') invItem.qty = remainingGrams / defaults.conv.kg_to_g;
+          else {
+            const d = densityFor(invItem.name);
+            if(d!=null){
+              const remainingMl = remainingGrams / d;
+              if(invItem.unit==='ml') invItem.qty = remainingMl;
+              else if(invItem.unit==='l') invItem.qty = remainingMl / defaults.conv.l_to_ml;
+              else if(invItem.unit==='xic') invItem.qty = remainingMl / defaults.conv.cup_ml;
+              else invItem.qty = 0;
+            } else invItem.qty = 0;
+          }
+        }
+      }
+    } else {
+      const idx = copy.findIndex(x=>x.name.toLowerCase()===ing.name.toLowerCase() && x.unit === ing.unit);
+      if(idx>=0) copy[idx].qty = Math.max(0, copy[idx].qty - needTotalQty);
+    }
+  }
+  return copy;
+}
+function toGrams(qty, unit, name){ // wrapper to use local densities
+  if(qty==null || isNaN(qty)) return null;
+  const u = normalizeUnit(unit||'un');
+  const c = defaults.conv;
+  if(u==='g') return qty;
+  if(u==='kg') return qty * c.kg_to_g;
+  if(u==='mg') return qty / c.g_to_mg;
+  if(u==='ml'){ const d = densityFor(name); return d!=null? qty * d : null; }
+  if(u==='l'){ const ml = qty * c.l_to_ml; const d = densityFor(name); return d!=null? ml * d : null; }
+  if(u==='xic'){ const ml = qty * c.cup_ml; const d = densityFor(name); return d!=null? ml * d : null; }
+  if(u==='cs'){ const ml = qty * c.tbsp_ml; const d = densityFor(name); return d!=null? ml * d : null; }
+  if(u==='ch'){ const ml = qty * c.tsp_ml; const d = densityFor(name); return d!=null? ml * d : null; }
+  return null;
+}
+
+// attach block click handlers
+qs('#b-inv').addEventListener('click', showInventory);
+qs('#b-rec').addEventListener('click', showRecipes);
+qs('#b-create').addEventListener('click', showCreatePlan);
+qs('#b-current').addEventListener('click', showCurrentPlan);
+
+// modal close on background
+modalBack.addEventListener('click', (e)=>{ if(e.target===modalBack) closeModal(); });
+
+// Main alerts renderer (basic checks)
+function renderMainAlerts(){
+  const issues = [];
+  if(recipes.length===0) issues.push({text:'Nenhuma receita cadastrada', level:'warn'});
+  // check if plan refers to recipes not in list
+  if(plan && plan.length){
+    // check missing ingredients aggregated
+    const missing = {};
+    plan.forEach(day=> day.forEach(meal=>{
+      if(meal && meal.suggested && meal.recipe){
+        const r = meal.recipe;
+        const totalPersonMeals = 4 * r.days;
+        const cookingsNeeded = Math.ceil(totalPersonMeals / r.serves);
+        r.ingredients.forEach(ing=>{
+          const needTotalQty = ing.qty * cookingsNeeded;
+          const needG = toGrams(needTotalQty, ing.unit, ing.name);
+          if(needG!=null){
+            const found = inventory.find(x=>x.name.toLowerCase()===ing.name.toLowerCase());
+            const haveG = found? toGrams(found.qty, found.unit, found.name) : 0;
+            const short = Math.max(0, needG - haveG);
+            if(short>0) missing[ing.name] = (missing[ing.name]||0) + short;
+          } else {
+            const found = inventory.find(x=>x.name.toLowerCase()===ing.name.toLowerCase());
+            const have = found? found.qty : 0;
+            const short = Math.max(0, needTotalQty - have);
+            if(short>0) missing[ing.name] = (missing[ing.name]||0) + short;
+          }
+        });
+      }
+    }));
+    if(Object.keys(missing).length) issues.push({text:'Faltam ingredientes para o plano gerado', level:'warn'});
+  }
+  // update alerts area
+  alertsEl.innerHTML = '';
+  if(issues.length===0) alertsEl.innerHTML = '<div class="small">Nenhum aviso por enquanto.</div>';
+  else issues.forEach(it=> {
+    const n = document.createElement('div'); n.textContent = it.text; n.style.marginTop='6px';
+    if(it.level==='warn') n.style.color='#b47c00'; if(it.level==='error') n.style.color='crimson';
+    alertsEl.appendChild(n);
+  });
+}
+
+// initial render
+renderMainAlerts();
+
+// Register service worker for PWA (works when hosted over HTTPS / localhost)
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('cardapio_sw.js').then(()=> console.log('SW registrado')).catch(()=> console.log('SW falhou'));
+}
+</script>
+</body>
+</html>
