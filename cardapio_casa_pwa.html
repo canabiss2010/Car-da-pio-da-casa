@@ -90,8 +90,8 @@
   </div>
 
 <script>
-// Core app logic (v6 visual PWA): four blocks that open details; densities preloaded silently.
-// Data stored in localStorage keys cc_inv_pwa, cc_rec_pwa
+// Core app logic (v6 visual PWA): quatro blocos que abrem detalhes; densidades pré-carregadas.
+// Dados em localStorage: cc_inv_pwa, cc_rec_pwa, cc_plan_pwa
 const qs = s => document.querySelector(s);
 
 const densities = {
@@ -101,7 +101,7 @@ const densities = {
   "acucar cristal":0.85,"cafe moido":0.5,"sal":1.2,"cebola":0.64,"alho":0.6,"atum":0.8,"milho":0.72,"ervilha":0.72
 };
 
-// basic defaults
+// defaults de conversão
 const defaults = {
   conv: { kg_to_g:1000, g_to_mg:1000, l_to_ml:1000, cup_ml:240, tbsp_ml:15, tsp_ml:5 }
 };
@@ -126,28 +126,15 @@ function saveAll(){
 function normalizeUnit(u){
   if(!u) return 'un';
   const key = u.toString().toLowerCase().replace(/\s+/g,'').replace(/[.,]/g,'').trim();
-  const map = {'kg':'kg','kilo':'kg','g':'g','grama':'g','l':'l','litro':'l','ml':'ml','xic':'xic','xicara':'xic','xícara':'xic','cs':'cs','colher_sopa':'cs','ch':'ch','colher_cha':'ch','un':'un','lat':'lat'};
+  const map = {'kg':'kg','kilo':'kg','g':'g','grama':'g','gr':'g','l':'l','litro':'l','ml':'ml','xic':'xic','xicara':'xic','xícara':'xic','cs':'cs','colher_sopa':'cs','ch':'ch','colher_cha':'ch','un':'un','lat':'lat','cx':'cx','caixa':'cx','pacote':'pacote'};
   return map[key]||key;
 }
 function parseLine(line){
   const parts = line.split(',').map(s=>s.trim()).filter(Boolean);
   if(parts.length===0) return null;
   if(parts.length===1) return {name:parts[0].toLowerCase(), qty:1, unit:'un'};
-  return {name:parts[0].toLowerCase(), qty:parseFloat(parts[1])||0, unit:normalizeUnit(parts[2]||'un')};
-}
-function toGrams(qty, unit, name){
-  if(qty==null || isNaN(qty)) return null;
-  const u = normalizeUnit(unit||'un');
-  const c = defaults.conv;
-  if(u==='g') return qty;
-  if(u==='kg') return qty * c.kg_to_g;
-  if(u==='mg') return qty / c.g_to_mg;
-  if(u==='ml'){ const d = densityFor(name); return d!=null? qty * d : null; }
-  if(u==='l'){ const ml = qty * c.l_to_ml; const d = densityFor(name); return d!=null? ml * d : null; }
-  if(u==='xic'){ const ml = qty * c.cup_ml; const d = densityFor(name); return d!=null? ml * d : null; }
-  if(u==='cs'){ const ml = qty * c.tbsp_ml; const d = densityFor(name); return d!=null? ml * d : null; }
-  if(u==='ch'){ const ml = qty * c.tsp_ml; const d = densityFor(name); return d!=null? ml * d : null; }
-  return null;
+  const qty = parseFloat(parts[1]) || 0;
+  return {name:parts[0].toLowerCase(), qty:qty, unit:normalizeUnit(parts[2]||'un')};
 }
 function densityFor(name){
   if(!name) return null;
@@ -161,7 +148,7 @@ function densityFor(name){
 // Alerts management
 function setAlert(text, level='info'){
   const msg = {text, level, time: new Date().toISOString()};
-  // simple push to alerts area (show latest)
+  // push ao topo dos avisos (mostra os mais recentes)
   const node = document.createElement('div'); node.textContent = `${text}`; node.style.marginTop='6px';
   if(level==='error') node.style.color='crimson';
   else if(level==='warn') node.style.color='#b47c00';
@@ -177,7 +164,7 @@ function openModal(title, contentHTML){
 }
 function closeModal(){ modalBack.style.display='none'; modalContent.innerHTML=''; }
 
-// Build modal UIs for each block
+// Build modal UIs for cada bloco
 function showInventory(){
   const html = `
     <div style="display:flex;gap:8px"><input id="m_invLine" placeholder="ex: arroz,2,kg" /><button id="m_addInv" class="btn-ghost">Adicionar</button></div>
@@ -187,7 +174,7 @@ function showInventory(){
     <div id="m_invList" class="list" style="margin-top:12px"></div>
   `;
   openModal('Dispensa', html);
-  // attach handlers after short delay
+  // attach handlers depois de rápido delay
   setTimeout(()=> {
     const render = ()=> {
       const el = qs('#m_invList'); el.innerHTML='';
@@ -197,7 +184,15 @@ function showInventory(){
         node.innerHTML = `<div style="max-width:70%"><strong style="text-transform:capitalize">${it.name}</strong><div class="small">${it.qty} ${it.unit}</div></div><div><button data-idx="${idx}" class="btn-ghost">Remover</button></div>`;
         el.appendChild(node);
       });
-      el.querySelectorAll('button[data-idx]').forEach(b=> b.addEventListener('click', ()=> { const i=Number(b.dataset.idx); inventory.splice(i,1); saveAll(); render(); setAlert('Item removido: '+b.previousSibling); }));
+      // corrigido: capturar nome antes de remover
+      el.querySelectorAll('button[data-idx]').forEach(b=> b.addEventListener('click', ()=> {
+        const i = Number(b.dataset.idx);
+        const name = inventory[i] ? inventory[i].name : 'item';
+        inventory.splice(i,1);
+        saveAll();
+        render();
+        setAlert('Item removido: '+name);
+      }));
     };
     qs('#m_addInv').addEventListener('click', ()=> {
       const v = qs('#m_invLine').value.trim(); if(!v) return alert('Digite: nome,quantidade,unidade');
@@ -235,7 +230,14 @@ function showRecipes(){
         node.innerHTML = `<div style="max-width:70%"><strong style="text-transform:capitalize">${r.name}</strong><div class="small">Rende ${r.serves} · Dura ${r.days} dia(s) · P${r.priority}</div></div><div><button data-idx="${idx}" class="btn-ghost">Remover</button></div>`;
         el.appendChild(node);
       });
-      el.querySelectorAll('button[data-idx]').forEach(b=> b.addEventListener('click', ()=> { recipes.splice(Number(b.dataset.idx),1); saveAll(); render(); setAlert('Receita removida'); }));
+      el.querySelectorAll('button[data-idx]').forEach(b=> b.addEventListener('click', ()=> {
+        const idx = Number(b.dataset.idx);
+        const name = recipes[idx] ? recipes[idx].name : 'receita';
+        recipes.splice(idx,1);
+        saveAll();
+        render();
+        setAlert('Receita removida: ' + name);
+      }));
     };
     qs('#m_addRec').addEventListener('click', ()=> {
       const name = qs('#m_recName').value.trim(); if(!name) return alert('Nome da receita');
@@ -284,7 +286,7 @@ function showCreatePlan(){
       const days = parseInt(qs('#m_days').value)||7;
       const mealsPerDay = parseInt(qs('#m_meals').value)||2;
       if(recipes.length===0) return alert('Adicione receitas primeiro');
-      // simple planner reusing earlier logic
+      // planner simples
       let workingInv = inventory.map(x=>({...x}));
       const newPlan = [];
       let activePrepared = [];
@@ -300,7 +302,7 @@ function showCreatePlan(){
             activePrepared = activePrepared.filter(p=>p.remainingSlots>0);
           }
           if(!assigned){
-            // pick candidate by priority that can be cooked to cover its days
+            // pick candidate por prioridade que pode cobrir os dias
             let candidate=null;
             for(const r of recipes){
               const totalPersonMeals = people * r.days;
@@ -313,7 +315,7 @@ function showCreatePlan(){
               if(remainingSlots>0) activePrepared.push({recipe:candidate.r, remainingSlots});
               assigned = {name:candidate.r.name, suggested:false, recipe:candidate.r};
             } else {
-              // fallback: pick best shortage
+              // fallback: escolha com menor falta
               let best=null; let bestShort=Infinity;
               for(const r of recipes){
                 const totalPersonMeals = people * r.days;
@@ -322,16 +324,14 @@ function showCreatePlan(){
                 r.ingredients.forEach(ing=>{
                   const needTotalQty = ing.qty * cookingsNeeded;
                   const needG = toGrams(needTotalQty, ing.unit, ing.name);
-                  if(needG!=null){
-                    const found = workingInv.find(x=>x.name.toLowerCase()===ing.name.toLowerCase());
-                    const have = found? toGrams(found.qty, found.unit, found.name) : null;
-                    if(needG!=null && have!=null) shortage += Math.max(0, needG - have);
-                    else if(needG!=null && have==null) shortage += needG;
-                    else {
-                      const haveQty = found?found.qty:0;
-                      shortage += Math.max(0, needTotalQty - haveQty);
-                    }
-                  });
+                  const found = workingInv.find(x=>x.name.toLowerCase()===ing.name.toLowerCase());
+                  const have = found? toGrams(found.qty, found.unit, found.name) : null;
+                  if(needG!=null && have!=null) shortage += Math.max(0, needG - have);
+                  else if(needG!=null && have==null) shortage += needG;
+                  else {
+                    const haveQty = found?found.qty:0;
+                    shortage += Math.max(0, needTotalQty - haveQty);
+                  }
                 });
                 if(shortage < bestShort){ bestShort = shortage; best={r,cookingsNeeded}; }
               }
@@ -343,7 +343,7 @@ function showCreatePlan(){
         }
         newPlan.push(day);
       }
-      // commit plan and save (consumes actual inventory)
+      // aplica plano e consome estoque
       plan = newPlan;
       inventory = workingInv;
       saveAll();
@@ -353,7 +353,7 @@ function showCreatePlan(){
     });
 
     qs('#m_sim').addEventListener('click', ()=> {
-      // simulate without consuming inventory
+      // simulação sem consumir estoque
       const people = parseInt(qs('#m_people').value)||1;
       const days = parseInt(qs('#m_days').value)||7;
       const mealsPerDay = parseInt(qs('#m_meals').value)||2;
@@ -380,7 +380,6 @@ function showCreatePlan(){
               if(canCookForSlots(r, workingInv, cookingsNeeded)) { candidate = {r,cookingsNeeded}; break; }
             }
             if(candidate){
-              // do NOT consume inv
               const remainingSlots = candidate.r.days -1;
               if(remainingSlots>0) activePrepared.push({recipe:candidate.r, remainingSlots});
               assigned = {name:candidate.r.name, suggested:false, recipe:candidate.r};
@@ -423,7 +422,7 @@ function showCurrentPlan(){
   },50);
 }
 
-// utility functions reused
+// utility functions
 function canCookForSlots(rec, invCopy, cookingsNeeded){
   for(const ing of rec.ingredients){
     const needTotalQty = ing.qty * cookingsNeeded;
@@ -474,7 +473,7 @@ function consumeCookingsInv(rec, invCopy, cookingsNeeded){
   }
   return copy;
 }
-function toGrams(qty, unit, name){ // wrapper to use local densities
+function toGrams(qty, unit, name){ // wrapper para conversões usando densidades locais
   if(qty==null || isNaN(qty)) return null;
   const u = normalizeUnit(unit||'un');
   const c = defaults.conv;
@@ -489,7 +488,7 @@ function toGrams(qty, unit, name){ // wrapper to use local densities
   return null;
 }
 
-// attach block click handlers
+// attach block handlers
 qs('#b-inv').addEventListener('click', showInventory);
 qs('#b-rec').addEventListener('click', showRecipes);
 qs('#b-create').addEventListener('click', showCreatePlan);
@@ -498,13 +497,12 @@ qs('#b-current').addEventListener('click', showCurrentPlan);
 // modal close on background
 modalBack.addEventListener('click', (e)=>{ if(e.target===modalBack) closeModal(); });
 
-// Main alerts renderer (basic checks)
+// Main alerts renderer
 function renderMainAlerts(){
   const issues = [];
   if(recipes.length===0) issues.push({text:'Nenhuma receita cadastrada', level:'warn'});
-  // check if plan refers to recipes not in list
+  // checar faltas para plano atual
   if(plan && plan.length){
-    // check missing ingredients aggregated
     const missing = {};
     plan.forEach(day=> day.forEach(meal=>{
       if(meal && meal.suggested && meal.recipe){
@@ -530,7 +528,7 @@ function renderMainAlerts(){
     }));
     if(Object.keys(missing).length) issues.push({text:'Faltam ingredientes para o plano gerado', level:'warn'});
   }
-  // update alerts area
+  // atualiza área de avisos
   alertsEl.innerHTML = '';
   if(issues.length===0) alertsEl.innerHTML = '<div class="small">Nenhum aviso por enquanto.</div>';
   else issues.forEach(it=> {
@@ -540,12 +538,12 @@ function renderMainAlerts(){
   });
 }
 
-// initial render
+// render inicial
 renderMainAlerts();
 
-// Register service worker for PWA (works when hosted over HTTPS / localhost)
+// Registrar service worker (usar caminho explícito)
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('cardapio_sw.js').then(()=> console.log('SW registrado')).catch(()=> console.log('SW falhou'));
+  navigator.serviceWorker.register('./cardapio_sw.js').then(()=> console.log('SW registrado')).catch(()=> console.log('SW falhou'));
 }
 </script>
 </body>
