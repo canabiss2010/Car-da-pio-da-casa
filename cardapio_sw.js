@@ -8,8 +8,8 @@ const URLS_TO_CACHE = [
   'cardapio_casa_pwa.html',
   'cardapio_manifest.json',
   'cardapio_sw.js',
-  'icons/1147832-2.png',
-  'icons/1147832.png'
+  'icons/icon-192.png',
+  'icons/icon-512.png'
 ];
 
 self.addEventListener('install', event => {
