@@ -1,0 +1,55 @@
+/**
+ * Funções helper para conversão e parse de dados
+ * Reutilizáveis em qualquer parte do aplicativo
+ */
+
+// Densidades de ingredientes
+const densities = {
+  "água":1,"agua":1,"leite":1,"oleo":0.92,"óleo":0.92,"acucar":0.85,"açúcar":0.85,"farinha":0.53,"farinha de trigo":0.53,
+  "arroz":0.85,"feijao":0.7,"carne moida":0.95,"carne moída":0.95,"batata":0.65,"tomate":0.95,"aipim":0.6,"mandioquinha":0.6,
+  "óleo vegetal":0.92,"manteiga":0.96,"creme de leite":1.01,"iogurte":1.03,"queijo ralado":0.32,"açúcar cristal":0.85,
+  "acucar cristal":0.85,"cafe moido":0.5,"sal":1.2,"cebola":0.64,"alho":0.6,"atum":0.8,"milho":0.72,"ervilha":0.72
+};
+
+const defaults = {
+  conv: { kg_to_g:1000, g_to_mg:1000, l_to_ml:1000, cup_ml:240, tbsp_ml:15, tsp_ml:5 }
+};
+
+export function normalizeUnit(u){
+  if(!u) return 'un';
+  const key = u.toString().toLowerCase().replace(/\s+/g,'').replace(/[.,]/g,'').trim();
+  const map = {'kg':'kg','kilo':'kg','g':'g','grama':'g','gr':'g','l':'l','litro':'l','ml':'ml','xic':'xic','xicara':'xic','xícara':'xic','cs':'cs','colher_sopa':'cs','ch':'ch','colher_cha':'ch','un':'un','lat':'lat','cx':'cx','caixa':'cx','pacote':'pacote'};
+  return map[key]||key;
+}
+
+export function parseLine(line){
+  const parts = line.split(',').map(s=>s.trim()).filter(Boolean);
+  if(parts.length===0) return null;
+  if(parts.length===1) return {name:parts[0].toLowerCase(), qty:1, unit:'un'};
+  const qty = parseFloat(parts[1]) || 0;
+  return {name:parts[0].toLowerCase(), qty:qty, unit:normalizeUnit(parts[2]||'un')};
+}
+
+export function densityFor(name){
+  if(!name) return null;
+  const k = name.toLowerCase().trim();
+  if(densities[k]!=null) return densities[k];
+  const alt = k.replace(/\s+s$/,'');
+  if(densities[alt]!=null) return densities[alt];
+  return null;
+}
+
+export function toGrams(qty, unit, name){ 
+  if(qty==null || isNaN(qty)) return null;
+  const u = normalizeUnit(unit||'un');
+  const c = defaults.conv;
+  if(u==='g') return qty;
+  if(u==='kg') return qty * c.kg_to_g;
+  if(u==='mg') return qty / c.g_to_mg;
+  if(u==='ml'){ const d = densityFor(name); return d!=null? qty * d : null; }
+  if(u==='l'){ const ml = qty * c.l_to_ml; const d = densityFor(name); return d!=null? ml * d : null; }
+  if(u==='xic'){ const ml = qty * c.cup_ml; const d = densityFor(name); return d!=null? ml * d : null; }
+  if(u==='cs'){ const ml = qty * c.tbsp_ml; const d = densityFor(name); return d!=null? ml * d : null; }
+  if(u==='ch'){ const ml = qty * c.tsp_ml; const d = densityFor(name); return d!=null? ml * d : null; }
+  return null;
+}

@@ -58,6 +58,9 @@ const qs = s => document.querySelector(s);
 // Importar StorageService
 import { StorageService } from './src/services/Storage.js';
 
+// Importar funções helper
+import { normalizeUnit, parseLine, densityFor, toGrams } from './src/utils/helpers.js';
+
 // DENSIDADES E CONVERSÕES (movido para o topo)
 const densities = {
   "água":1,"agua":1,"leite":1,"oleo":0.92,"óleo":0.92,"acucar":0.85,"açúcar":0.85,"farinha":0.53,"farinha de trigo":0.53,
