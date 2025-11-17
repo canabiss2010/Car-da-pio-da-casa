@@ -315,16 +315,44 @@ function showRecipes(){
           const icons = {proteina: '🥩', carboidrato: '🍞', vegetal1: '🥬', vegetal2: '🥕'};
           return icons[c] || '';
         }).join(' ') : '';
-        node.innerHTML = `<div style="max-width:70%"><strong style="text-transform:capitalize">${r.name}</strong><div class="small">${catIcons} Rende ${r.serves} · Dura ${r.days} dia(s) · P${r.priority}</div></div><div><button data-idx="${idx}" class="btn-ghost">Remover</button></div>`;
+        node.innerHTML = `<div style="max-width:70%"><strong style="text-transform:capitalize">${r.name}</strong><div class="small">${catIcons} Rende ${r.serves} · Dura ${r.days} dia(s) · P${r.priority}</div></div><div><button data-idx="${idx}" data-action="remove" class="btn-ghost">Remover</button><button data-idx="${idx}" data-action="edit" class="btn-ghost">Editar</button></div>`;
         el.appendChild(node);
       });
-      el.querySelectorAll('button[data-idx]').forEach(b=> b.addEventListener('click', ()=> {
+      el.querySelectorAll('button[data-idx]').forEach(b=> b.addEventListener('click', (e)=> {
         const idx = Number(b.dataset.idx);
-        const name = recipes[idx] ? recipes[idx].name : 'receita';
-        recipes.splice(idx,1);
-        saveAll();
-        render();
-        setAlert('Receita removida: ' + name);
+        const action = b.dataset.action;
+        
+        if(action === 'remove') {
+          const name = recipes[idx] ? recipes[idx].name : 'receita';
+          recipes.splice(idx,1);
+          saveAll();
+          render();
+          setAlert('Receita removida: ' + name);
+        } else if(action === 'edit') {
+          const recipe = recipes[idx];
+          if(recipe) {
+            // Preencher formulário com dados da receita
+            qs('#m_recName').value = recipe.name;
+            qs('#m_recServes').value = recipe.serves;
+            qs('#m_recPriority').value = recipe.priority;
+            qs('#m_recDays').value = recipe.days;
+            
+            // Preencher ingredientes
+            const ingredientsText = recipe.ingredients.map(ing => 
+              `${ing.name},${ing.qty},${ing.unit}`
+            ).join('\n');
+            qs('#m_recIngredients').value = ingredientsText;
+            
+            // Remover receita original
+            recipes.splice(idx,1);
+            saveAll();
+            render();
+            setAlert('Editando receita: ' + recipe.name);
+            
+            // Focar no nome para facilitar edição
+            qs('#m_recName').focus();
+          }
+        }
       }));
     };
     qs('#m_addRec').addEventListener('click', ()=> {
