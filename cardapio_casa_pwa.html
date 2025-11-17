@@ -535,10 +535,10 @@ function showCurrentPlan(){
         el.appendChild(node);
       });
     };
-    el.querySelectorAll('button[data-meal-id]').forEach(btn => {
+    el.querySelectorAll('button[data-day]').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const dayIndex = parseInt(e.target.dataset.mealId.split(',')[0]);
-        const mealIndex = parseInt(e.target.dataset.mealId.split(',')[1]);
+        const dayIndex = parseInt(e.target.dataset.day);
+        const mealIndex = parseInt(e.target.dataset.meal);
         showRecipeSelector(dayIndex, mealIndex);
       });
     });
