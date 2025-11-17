@@ -6,7 +6,46 @@
   <title>CardápioCasa — PWA</title>
   <link rel="manifest" href="cardapio_manifest.json">
   <meta name="theme-color" content="#1F6F3B"/>
-  <link rel="stylesheet" href="./src/styles/main.css">
+  <style>
+    :root{
+      --bg:#F7F6F2;
+      --card:#fff;
+      --accent:#1F6F3B;
+      --accent-2:#2ea47a;
+      --muted:#6b6b6b;
+      --radius:14px;
+      --maxw:420px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;background:var(--bg);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;color:#071019;
+      display:flex;justify-content:center;padding:18px;
+    }
+    .wrap{width:100%;max-width:var(--maxw)}
+    header{display:flex;align-items:center;gap:12px;padding:14px;border-radius:14px;background:linear-gradient(180deg,rgba(31,111,59,0.06),#fff);border:1px solid rgba(31,111,59,0.05)}
+    .logo{width:56px;height:56px;border-radius:10px;background-image:url('icons/icon-192.png');background-size:cover;background-position:center;background-repeat:no-repeat;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:20px}
+    h1{margin:0;font-family:Oswald, sans-serif;color:var(--accent);font-size:20px}
+    .subtitle{margin:0;font-size:13px;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+    .block{background:var(--card);border-radius:12px;padding:12px;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;min-height:92px;border:1px solid rgba(8,20,25,0.04);box-shadow:0 8px 20px rgba(8,20,25,0.03);cursor:pointer}
+    .block h3{margin:0;font-size:15px;color:var(--accent);font-family:Oswald, sans-serif}
+    .block p{margin:8px 0 0 0;color:var(--muted);font-size:13px}
+    .full{grid-column:1/-1}
+    .alerts{margin-top:12px;background:linear-gradient(180deg,#fff,#fbfffb);border-radius:12px;padding:12px;border:1px solid rgba(31,111,59,0.06);min-height:64px}
+    .small{font-size:12px;color:var(--muted)}
+    /* modal */
+    .modal-back{position:fixed;inset:0;background:rgba(2,6,23,0.4);display:none;align-items:center;justify-content:center;padding:18px;z-index:60}
+    .modal{width:100%;max-width:520px;background:#fff;border-radius:14px;padding:14px;box-shadow:0 20px 60px rgba(2,6,23,0.3);max-height:90vh;overflow:auto}
+    .modal .row{display:flex;gap:8px}
+    input,textarea,select{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(8,20,25,0.06);margin-top:8px;font-size:14px}
+    button{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#fff;padding:10px 12px;border-radius:10px;border:0;font-weight:700;cursor:pointer}
+    .btn-ghost{background:transparent;border:1px solid rgba(8,20,25,0.06);padding:9px;border-radius:10px;color:var(--muted);cursor:pointer}
+    .list{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+    .item{display:flex;justify-content:space-between;padding:10px;border-radius:10px;border:1px solid rgba(8,20,25,0.04);background:linear-gradient(180deg,#fff,#fbfffb)}
+    footer{text-align:center;margin-top:12px;font-size:12px;color:var(--muted)}
+    @media(min-width:560px){ .grid{grid-template-columns:1fr 1fr 1fr 1fr} .block{min-height:110px} .wrap{max-width:980px} }
+  </style>
 </head>
 <body>
   <div class="wrap">
@@ -55,12 +94,57 @@
 // Dados em localStorage: cc_inv_pwa, cc_rec_pwa, cc_plan_pwa
 const qs = s => document.querySelector(s);
 
-// Importar StorageService
-import { StorageService } from './src/services/Storage.js';
+// DENSIDADES E CONVERSÕES (movido para o topo)
+const densities = {
+  "água":1,"agua":1,"leite":1,"oleo":0.92,"óleo":0.92,"acucar":0.85,"açúcar":0.85,"farinha":0.53,"farinha de trigo":0.53,
+  "arroz":0.85,"feijao":0.7,"carne moida":0.95,"carne moída":0.95,"batata":0.65,"tomate":0.95,"aipim":0.6,"mandioquinha":0.6,
+  "óleo vegetal":0.92,"manteiga":0.96,"creme de leite":1.01,"iogurte":1.03,"queijo ralado":0.32,"açúcar cristal":0.85,
+  "acucar cristal":0.85,"cafe moido":0.5,"sal":1.2,"cebola":0.64,"alho":0.6,"atum":0.8,"milho":0.72,"ervilha":0.72
+};
 
-// Importar funções helper
-import { normalizeUnit, parseLine, densityFor, toGrams } from './src/utils/helpers.js';
+const defaults = {
+  conv: { kg_to_g:1000, g_to_mg:1000, l_to_ml:1000, cup_ml:240, tbsp_ml:15, tsp_ml:5 }
+};
 
+// FUNÇÕES HELPER (movidas para o topo - CORREÇÃO CRÍTICA)
+function normalizeUnit(u){
+  if(!u) return 'un';
+  const key = u.toString().toLowerCase().replace(/\s+/g,'').replace(/[.,]/g,'').trim();
+  const map = {'kg':'kg','kilo':'kg','g':'g','grama':'g','gr':'g','l':'l','litro':'l','ml':'ml','xic':'xic','xicara':'xic','xícara':'xic','cs':'cs','colher_sopa':'cs','ch':'ch','colher_cha':'ch','un':'un','lat':'lat','cx':'cx','caixa':'cx','pacote':'pacote'};
+  return map[key]||key;
+}
+
+function parseLine(line){
+  const parts = line.split(',').map(s=>s.trim()).filter(Boolean);
+  if(parts.length===0) return null;
+  if(parts.length===1) return {name:parts[0].toLowerCase(), qty:1, unit:'un'};
+  const qty = parseFloat(parts[1]) || 0;
+  return {name:parts[0].toLowerCase(), qty:qty, unit:normalizeUnit(parts[2]||'un')};
+}
+
+function densityFor(name){
+  if(!name) return null;
+  const k = name.toLowerCase().trim();
+  if(densities[k]!=null) return densities[k];
+  const alt = k.replace(/\s+s$/,'');
+  if(densities[alt]!=null) return densities[alt];
+  return null;
+}
+
+function toGrams(qty, unit, name){ 
+  if(qty==null || isNaN(qty)) return null;
+  const u = normalizeUnit(unit||'un');
+  const c = defaults.conv;
+  if(u==='g') return qty;
+  if(u==='kg') return qty * c.kg_to_g;
+  if(u==='mg') return qty / c.g_to_mg;
+  if(u==='ml'){ const d = densityFor(name); return d!=null? qty * d : null; }
+  if(u==='l'){ const ml = qty * c.l_to_ml; const d = densityFor(name); return d!=null? ml * d : null; }
+  if(u==='xic'){ const ml = qty * c.cup_ml; const d = densityFor(name); return d!=null? ml * d : null; }
+  if(u==='cs'){ const ml = qty * c.tbsp_ml; const d = densityFor(name); return d!=null? ml * d : null; }
+  if(u==='ch'){ const ml = qty * c.tsp_ml; const d = densityFor(name); return d!=null? ml * d : null; }
+  return null;
+}
 
 // CORREÇÃO: Função canCookForSlots movida para o topo
 function canCookForSlots(rec, invCopy, cookingsNeeded){
@@ -115,12 +199,22 @@ function consumeCookingsInv(rec, invCopy, cookingsNeeded){
   return copy;
 }
 
+// VALIDAÇÃO DE DADOS (NOVO)
+function validateJSON(data, defaultReturn = []) {
+  try {
+    if (!data || data === 'null' || data === 'undefined') return defaultReturn;
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : defaultReturn;
+  } catch (e) {
+    console.warn('Dados corrompidos no localStorage, usando valores padrão:', e);
+    return defaultReturn;
+  }
+}
 
-
-const data = StorageService.loadAll();
-let inventory = data.inventory;
-let recipes = data.recipes;
-let plan = data.plan;
+// STORAGE (com validação)
+let inventory = validateJSON(localStorage.getItem('cc_inv_pwa'));
+let recipes = validateJSON(localStorage.getItem('cc_rec_pwa'));
+let plan = validateJSON(localStorage.getItem('cc_plan_pwa'));
 
 // UI hooks
 const modalBack = qs('#modalBack');
@@ -128,8 +222,12 @@ const modalContent = qs('#modalContent');
 const alertsEl = qs('#alerts');
 
 function saveAll(){
-  const success = StorageService.saveAll({ inventory, recipes, plan });
-  if (!success) {
+  try {
+    localStorage.setItem('cc_inv_pwa', JSON.stringify(inventory));
+    localStorage.setItem('cc_rec_pwa', JSON.stringify(recipes));
+    localStorage.setItem('cc_plan_pwa', JSON.stringify(plan));
+  } catch (e) {
+    console.error('Erro ao salvar dados:', e);
     setAlert('Erro ao salvar dados. Verifique o espaço de armazenamento.', 'error');
   }
 }
