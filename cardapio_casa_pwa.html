@@ -516,7 +516,7 @@ function showCreatePlan(){
       setAlert('Simulação pronta (estoque não consumido)');
     });
 
-  },50);
+  },100);
 }
 
 function showCurrentPlan(){
@@ -538,6 +538,7 @@ function showCurrentPlan(){
         el.appendChild(node);
       });
     };
+    render();
     el.querySelectorAll('button[data-meal-id]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const dayIndex = parseInt(e.target.dataset.day);
