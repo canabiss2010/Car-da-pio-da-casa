@@ -437,7 +437,7 @@ function showCreatePlan(){
       plan = newPlan;
       inventory = workingInv;
       saveAll();
-      renderPreview(plan);
+      renderPreview(plan, people);
       setAlert('Plano gerado e estoque atualizado');
       renderMainAlerts();
     });
@@ -482,7 +482,7 @@ function showCreatePlan(){
         }
         newPlan.push(day);
       }
-      renderPreview(newPlan);
+      renderPreview(newPlan, people);
       setAlert('Simulação pronta (estoque não consumido)');
     });
 
