@@ -468,6 +468,8 @@ function showCreatePlan(){
       renderPreview(plan, people);
       setAlert('Plano gerado e estoque atualizado');
       renderMainAlerts();
+      closeModal();
+      render();
     });
 
     qs('#m_sim').addEventListener('click', ()=> {
