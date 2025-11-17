@@ -596,7 +596,7 @@ function showCurrentPlan(){
     qs('#m_clearPlan').addEventListener('click', ()=> { if(!confirm('Limpar plano atual?')) return; plan=[]; saveAll(); render(); setAlert('Plano limpo'); renderMainAlerts(); });
     qs('#m_exportPlan').addEventListener('click', ()=> { const blob = new Blob([JSON.stringify(plan,null,2)],{type:'application/json'}); const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='cardapio_plan.json'; a.click(); URL.revokeObjectURL(url); setAlert('Plano exportado'); });
     render();
-  },50);
+  },100);
 }
 
 // attach block handlers
