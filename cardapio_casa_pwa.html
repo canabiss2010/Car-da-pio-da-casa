@@ -311,7 +311,11 @@ function showRecipes(){
       if(recipes.length===0) el.innerHTML='<div class="small">Sem receitas</div>';
       recipes.forEach((r,idx)=>{
         const node = document.createElement('div'); node.className='item';
-        node.innerHTML = `<div style="max-width:70%"><strong style="text-transform:capitalize">${r.name}</strong><div class="small">Rende ${r.serves} · Dura ${r.days} dia(s) · P${r.priority}</div></div><div><button data-idx="${idx}" class="btn-ghost">Remover</button></div>`;
+        const catIcons = r.categories ? r.categories.map(c => {
+          const icons = {proteina: '🥩', carboidrato: '🍞', vegetal1: '🥬', vegetal2: '🥕'};
+          return icons[c] || '';
+        }).join(' ') : '';
+        node.innerHTML = `<div style="max-width:70%"><strong style="text-transform:capitalize">${r.name}</strong><div class="small">${catIcons} Rende ${r.serves} · Dura ${r.days} dia(s) · P${r.priority}</div></div><div><button data-idx="${idx}" class="btn-ghost">Remover</button></div>`;
         el.appendChild(node);
       });
       el.querySelectorAll('button[data-idx]').forEach(b=> b.addEventListener('click', ()=> {
