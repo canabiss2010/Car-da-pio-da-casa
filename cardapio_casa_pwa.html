@@ -529,7 +529,8 @@ function showCurrentPlan(){
         node.innerHTML = `<strong>Dia ${idx+1}</strong>`;
         day.forEach((meal,i)=> {
           const m = document.createElement('div'); m.style.marginTop='6px';
-          m.innerHTML = `<div style="display:flex;justify-content:space-between"><div><strong>Refeição ${i+1}: ${meal.name}</strong><div class="small">${meal.suggested? 'Sugestão — faltam ingredientes':'Agendado'}</div></div></div>`;
+          const mealId = `day${idx}-meal${i}`;
+          m.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div style="flex:1"><strong>Refeição ${i+1}: ${meal.name}</strong><div class="small">${meal.suggested? 'Sugestão — faltam ingredientes':'Agendado'}</div></div><div style="display:flex;gap:4px"><button data-meal-id="${mealId}" data-day="${idx}" data-meal="${i}" class="btn-ghost small" style="padding:4px 8px;font-size:11px">Trocar</button></div></div>`;
           node.appendChild(m);
         });
         el.appendChild(node);
