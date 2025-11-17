@@ -535,6 +535,60 @@ function showCurrentPlan(){
         el.appendChild(node);
       });
     };
+    el.querySelectorAll('button[data-meal-id]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const dayIndex = parseInt(e.target.dataset.mealId.split(',')[0]);
+        const mealIndex = parseInt(e.target.dataset.mealId.split(',')[1]);
+        showRecipeSelector(dayIndex, mealIndex);
+      });
+    });
+
+    const showRecipeSelector = (dayIndex, mealIndex) => {
+      const currentMeal = plan[dayIndex][mealIndex];
+      const recipeOptions = recipes.map((r, idx) =>
+        `<option value="${idx}" ${r.name === currentMeal.name ? 'selected' : ''}>${r.name} (rende ${r.serves}, dura ${r.days} dias)</option>`
+      ).join('');
+
+      const selectorHTML = `
+        <div style="padding:12px;border:1px solid rgba(8,20,25,0.1);border-radius:10px;background:#f9f9f9">
+          <h4 style="margin:0 0 8px 0">Trocar Refeição - Dia ${dayIndex+1}, Refeição ${mealIndex+1}</h4>
+          <div style="margin-bottom:8px"><strong>Atual:</strong> ${currentMeal.name}</div>
+          <label>Escolha nova receita:</label>
+          <select id="recipeSelect" style="margin-top:4px">${recipeOptions}</select>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button id="confirmReplace" class="btn">Confirmar Troca</button>
+            <button id="cancelReplace" class="btn-ghost">Cancelar</button>
+          </div>
+        </div>
+      `;
+
+      const selectorDiv = document.createElement('div');
+      selectorDiv.innerHTML = selectorHTML;
+      selectorDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100;background:white;border-radius:12px;box-shadow:0 20px 60px rgba(2,6,23,0.3);max-width:400px;width:90%';
+      document.body.appendChild(selectorDiv);
+
+      document.getElementById('confirmReplace').addEventListener('click', () => {
+        const selectedIdx = parseInt(document.getElementById('recipeSelect').value);
+        const selectedRecipe = recipes[selectedIdx];
+
+        plan[dayIndex][mealIndex] = {
+          name: selectedRecipe.name,
+          suggested: false,
+          recipe: selectedRecipe
+        };
+
+        saveAll();
+        render();
+        setAlert(`Refeição trocada para: ${selectedRecipe.name}`);
+        renderMainAlerts();
+        document.body.removeChild(selectorDiv);
+      });
+
+      document.getElementById('cancelReplace').addEventListener('click', () => {
+        document.body.removeChild(selectorDiv);
+      });
+    };
+
     qs('#m_clearPlan').addEventListener('click', ()=> { if(!confirm('Limpar plano atual?')) return; plan=[]; saveAll(); render(); setAlert('Plano limpo'); renderMainAlerts(); });
     qs('#m_exportPlan').addEventListener('click', ()=> { const blob = new Blob([JSON.stringify(plan,null,2)],{type:'application/json'}); const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='cardapio_plan.json'; a.click(); URL.revokeObjectURL(url); setAlert('Plano exportado'); });
     render();
