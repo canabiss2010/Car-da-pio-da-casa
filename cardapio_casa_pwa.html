@@ -382,7 +382,7 @@ function showCreatePlan(){
   `;
   openModal('Criar Plano', html);
   setTimeout(()=> {
-    const renderPreview = (p)=> {
+    const renderPreview = (p, people = 4)=> {
       const el = qs('#m_planPreview'); el.innerHTML='';
       if(!p.length){ el.innerHTML='<div class="small">Sem plano</div>'; return; }
       p.forEach((day,idx)=>{
