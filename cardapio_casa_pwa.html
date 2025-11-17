@@ -519,6 +519,24 @@ qs('#b-rec').addEventListener('click', showRecipes);
 qs('#b-create').addEventListener('click', showCreatePlan);
 qs('#b-current').addEventListener('click', showCurrentPlan);
 
+// Suporte a navegação por teclado
+document.querySelectorAll('.block').forEach(block => {
+  block.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      block.click();
+    }
+  });
+  // Feedback visual ao focar
+  block.addEventListener('focus', () => {
+    block.style.outline = '2px solid var(--accent)';
+    block.style.outlineOffset = '2px';
+  });
+  block.addEventListener('blur', () => {
+    block.style.outline = 'none';
+  });
+});
+
 // modal close on background
 modalBack.addEventListener('click', (e)=>{ if(e.target===modalBack) closeModal(); });
 
