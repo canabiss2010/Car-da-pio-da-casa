@@ -94,6 +94,9 @@
 // Dados em localStorage: cc_inv_pwa, cc_rec_pwa, cc_plan_pwa
 const qs = s => document.querySelector(s);
 
+// Importar StorageService
+import { StorageService } from './src/services/Storage.js';
+
 // DENSIDADES E CONVERSÕES (movido para o topo)
 const densities = {
   "água":1,"agua":1,"leite":1,"oleo":0.92,"óleo":0.92,"acucar":0.85,"açúcar":0.85,"farinha":0.53,"farinha de trigo":0.53,
@@ -199,29 +202,7 @@ function consumeCookingsInv(rec, invCopy, cookingsNeeded){
   return copy;
 }
 
-// Carregar dados usando StorageService
-const StorageService = {
-  loadAll: () => {
-    try {
-      const inventory = JSON.parse(localStorage.getItem('cc_inv_pwa')) || [];
-      const recipes = JSON.parse(localStorage.getItem('cc_rec_pwa')) || [];
-      const plan = JSON.parse(localStorage.getItem('cc_plan_pwa')) || [];
-      return { inventory, recipes, plan };
-    } catch (e) {
-      console.error('Erro ao carregar dados:', e);
-      return { inventory: [], recipes: [], plan: [] };
-    }
-  },
-  saveAll: (data) => {
-    try {
-      localStorage.setItem('cc_inv_pwa', JSON.stringify(data.inventory));
-      localStorage.setItem('cc_rec_pwa', JSON.stringify(data.recipes));
-      localStorage.setItem('cc_plan_pwa', JSON.stringify(data.plan));
-    } catch (e) {
-      console.error('Erro ao salvar dados:', e);
-    }
-  }
-};
+
 
 const data = StorageService.loadAll();
 let inventory = data.inventory;
@@ -234,12 +215,8 @@ const modalContent = qs('#modalContent');
 const alertsEl = qs('#alerts');
 
 function saveAll(){
-  try {
-    localStorage.setItem('cc_inv_pwa', JSON.stringify(inventory));
-    localStorage.setItem('cc_rec_pwa', JSON.stringify(recipes));
-    localStorage.setItem('cc_plan_pwa', JSON.stringify(plan));
-  } catch (e) {
-    console.error('Erro ao salvar dados:', e);
+  const success = StorageService.saveAll({ inventory, recipes, plan });
+  if (!success) {
     setAlert('Erro ao salvar dados. Verifique o espaço de armazenamento.', 'error');
   }
 }
