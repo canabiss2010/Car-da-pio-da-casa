@@ -199,22 +199,34 @@ function consumeCookingsInv(rec, invCopy, cookingsNeeded){
   return copy;
 }
 
-// VALIDAÇÃO DE DADOS (NOVO)
-function validateJSON(data, defaultReturn = []) {
-  try {
-    if (!data || data === 'null' || data === 'undefined') return defaultReturn;
-    const parsed = JSON.parse(data);
-    return Array.isArray(parsed) ? parsed : defaultReturn;
-  } catch (e) {
-    console.warn('Dados corrompidos no localStorage, usando valores padrão:', e);
-    return defaultReturn;
+// Carregar dados usando StorageService
+const StorageService = {
+  loadAll: () => {
+    try {
+      const inventory = JSON.parse(localStorage.getItem('cc_inv_pwa')) || [];
+      const recipes = JSON.parse(localStorage.getItem('cc_rec_pwa')) || [];
+      const plan = JSON.parse(localStorage.getItem('cc_plan_pwa')) || [];
+      return { inventory, recipes, plan };
+    } catch (e) {
+      console.error('Erro ao carregar dados:', e);
+      return { inventory: [], recipes: [], plan: [] };
+    }
+  },
+  saveAll: (data) => {
+    try {
+      localStorage.setItem('cc_inv_pwa', JSON.stringify(data.inventory));
+      localStorage.setItem('cc_rec_pwa', JSON.stringify(data.recipes));
+      localStorage.setItem('cc_plan_pwa', JSON.stringify(data.plan));
+    } catch (e) {
+      console.error('Erro ao salvar dados:', e);
+    }
   }
-}
+};
 
-// STORAGE (com validação)
-let inventory = validateJSON(localStorage.getItem('cc_inv_pwa'));
-let recipes = validateJSON(localStorage.getItem('cc_rec_pwa'));
-let plan = validateJSON(localStorage.getItem('cc_plan_pwa'));
+const data = StorageService.loadAll();
+let inventory = data.inventory;
+let recipes = data.recipes;
+let plan = data.plan;
 
 // UI hooks
 const modalBack = qs('#modalBack');
