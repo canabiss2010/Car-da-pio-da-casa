@@ -464,7 +464,7 @@ function showRecipes(){
       const priority = Math.max(1, Math.min(10, parseInt(qs('#m_recPriority').value)||5));
       const days = Math.max(1, Math.min(5, parseInt(qs('#m_recDays').value)||2));
       const ingredients = lines.map(l=>{ const p=parseLine(l); return {name:p.name, qty:p.qty, unit:p.unit}; });
-      recipes.push({name, serves, ingredients, priority, days});
+      recipes.push({name, serves, ingredients, priority, days, frequency: priority});
       saveAll(); render(); qs('#m_recName').value=''; qs('#m_recIngredients').value=''; setAlert('Receita adicionada: '+name);
     });
     qs('#m_clearRec').addEventListener('click', ()=> { if(!confirm('Limpar receitas?')) return; recipes=[]; saveAll(); render(); setAlert('Receitas limpas'); });
