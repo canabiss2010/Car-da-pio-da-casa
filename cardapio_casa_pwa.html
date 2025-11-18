@@ -539,8 +539,25 @@ function showCurrentPlan(){
       });
     };
     render();
-    el.querySelectorAll('button[data-meal-id]').forEach(btn => {
+    const el = qs('#m_currentList');
+    // Event listener para o botão "Trocar" de cada dia
+    el.querySelectorAll('button[data-day]').forEach(btn => {
       btn.addEventListener('click', (e) => {
+        const dayIndex = parseInt(e.target.dataset.day);
+        // Mostrar modo de seleção para este dia
+        const dayElement = e.target.closest('div').querySelectorAll('[data-meal-id]');
+        dayElement.forEach(el => {
+          el.style.background = '#f0f9ff';
+          el.style.border = '1px dashed #3b82f6';
+          el.style.borderRadius = '6px';
+          el.style.padding = '4px';
+        });
+        setAlert('Clique na refeição que deseja trocar');
+      });
+    });
+    // Event listener para clicar nas refeições
+    el.querySelectorAll('[data-meal-id]').forEach(mealEl => {
+      mealEl.addEventListener('click', (e) => {
         const dayIndex = parseInt(e.target.dataset.day);
         const mealIndex = parseInt(e.target.dataset.meal);
         showRecipeSelector(dayIndex, mealIndex);
