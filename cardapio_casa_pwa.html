@@ -528,11 +528,11 @@ function showCurrentPlan(){
       if(!plan.length) el.innerHTML='<div class="small">Sem plano gerado</div>';
       plan.forEach((day,idx)=>{
         const node = document.createElement('div'); node.style.borderTop='1px solid rgba(8,20,25,0.04)'; node.style.padding='8px 0';
-        node.innerHTML = `<strong>Dia ${idx+1}</strong>`;
+        node.innerHTML = `<strong>Dia ${idx+1}</strong><button data-day="${idx}" class="btn-ghost small" style="margin-left:8px;padding:2px 6px;font-size:10px">Trocar</button>`;
         day.forEach((meal,i)=> {
           const m = document.createElement('div'); m.style.marginTop='6px';
           const mealId = `day${idx}-meal${i}`;
-          m.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div style="flex:1"><strong>Refeição ${i+1}: ${meal.name}</strong><div class="small">${meal.suggested? 'Sugestão — faltam ingredientes':'Agendado'}</div></div><div style="display:flex;gap:4px"><button data-meal-id="${mealId}" data-day="${idx}" data-meal="${i}" class="btn-ghost small" style="padding:4px 8px;font-size:11px">Trocar</button></div></div>`;
+          m.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div style="flex:1;cursor:pointer" data-meal-id="${mealId}" data-day="${idx}" data-meal="${i}"><strong>Refeição ${i+1}: ${meal.name}</strong><div class="small">${meal.suggested? 'Sugestão — faltam ingredientes':'Agendado'}</div></div></div>`;
           node.appendChild(m);
         });
         el.appendChild(node);
