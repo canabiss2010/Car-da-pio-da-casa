@@ -522,24 +522,54 @@ function showCreatePlan(){
             activePrepared = activePrepared.filter(p=>p.remainingSlots>0);
           }
           if(!assigned){
-            // pick candidate por prioridade que pode cobrir os dias
+            // Lógica de frequência: controlar quantas vezes cada receita aparece
+            const recipeUsage = {};
+            newPlan.forEach(day => day.forEach(meal => {
+              if(meal.recipe) {
+                recipeUsage[meal.recipe.name] = (recipeUsage[meal.recipe.name] || 0) + 1;
+              }
+            }));
+            
+            // Calcular limite máximo por receita baseado na frequência
+            const totalMeals = days * mealsPerDay;
+            const maxUsagePerRecipe = {};
+            recipes.forEach(r => {
+              // F10 = pode aparecer até 40% das refeições, F1 = até 10%
+              const maxPercentage = 0.1 + (r.frequency / r.priority) * 0.03;
+              maxUsagePerRecipe[r.name] = Math.ceil(totalMeals * maxPercentage);
+            });
+            
             let candidate=null;
-            for(const r of recipes){
-              // CORREÇÃO: Usar variável 'people' em vez de hardcoded '4'
-              const totalPersonMeals = people * r.days;
-              const cookingsNeeded = Math.ceil(totalPersonMeals / r.serves);
-              if(canCookForSlots(r, workingInv, cookingsNeeded)) { candidate = {r,cookingsNeeded}; break; }
+            
+            // Agrupar receitas por frequência (maior para menor)
+            const frequencies = [...new Set(recipes.map(r => r.frequency || r.priority))].sort((a,b) => b-a);
+            
+            for(const frequency of frequencies){
+              // Pegar receitas desta frequência que podem ser feitas E não atingiram limite
+              const frequencyRecipes = recipes.filter(r => 
+                (r.frequency || r.priority) === frequency && 
+                canCookForSlots(r, workingInv, Math.ceil(people * r.days / r.serves)) &&
+                (recipeUsage[r.name] || 0) < (maxUsagePerRecipe[r.name] || 1)
+              );
+              
+              if(frequencyRecipes.length > 0){
+                // Sortear aleatoriamente entre as receitas disponíveis
+                const randomRecipe = frequencyRecipes[Math.floor(Math.random() * frequencyRecipes.length)];
+                const cookingsNeeded = Math.ceil(people * randomRecipe.days / randomRecipe.serves);
+                candidate = {r: randomRecipe, cookingsNeeded};
+                break;
+              }
             }
+            
             if(candidate){
               workingInv = consumeCookingsInv(candidate.r, workingInv, candidate.cookingsNeeded);
               const remainingSlots = candidate.r.days -1;
               if(remainingSlots>0) activePrepared.push({recipe:candidate.r, remainingSlots});
               assigned = {name:candidate.r.name, suggested:false, recipe:candidate.r};
             } else {
-              // fallback: escolha com menor falta
+              // fallback: escolha com menor falta (sugestão)
               let best=null; let bestShort=Infinity;
               for(const r of recipes){
-                // CORREÇÃO: Usar variável 'people' em vez de hardcoded '4'
                 const totalPersonMeals = people * r.days;
                 const cookingsNeeded = Math.ceil(totalPersonMeals / r.serves);
                 let shortage=0;
@@ -597,13 +627,43 @@ function showCreatePlan(){
             activePrepared = activePrepared.filter(p=>p.remainingSlots>0);
           }
           if(!assigned){
+            // Lógica de frequência para simulação (sem consumir estoque)
+            const recipeUsage = {};
+            newPlan.forEach(day => day.forEach(meal => {
+              if(meal.recipe) {
+                recipeUsage[meal.recipe.name] = (recipeUsage[meal.recipe.name] || 0) + 1;
+              }
+            }));
+            
+            // Calcular limite máximo por receita baseado na frequência
+            const totalMeals = days * mealsPerDay;
+            const maxUsagePerRecipe = {};
+            recipes.forEach(r => {
+              const maxPercentage = 0.1 + (r.frequency || r.priority) * 0.03;
+              maxUsagePerRecipe[r.name] = Math.ceil(totalMeals * maxPercentage);
+            });
+            
             let candidate=null;
-            for(const r of recipes){
-              // CORREÇÃO: Usar variável 'people' em vez de hardcoded '4'
-              const totalPersonMeals = people * r.days;
-              const cookingsNeeded = Math.ceil(totalPersonMeals / r.serves);
-              if(canCookForSlots(r, workingInv, cookingsNeeded)) { candidate = {r,cookingsNeeded}; break; }
+            
+            // Agrupar receitas por frequência (maior para menor)
+            const frequencies = [...new Set(recipes.map(r => r.frequency || r.priority))].sort((a,b) => b-a);
+            
+            for(const frequency of frequencies){
+              // Pegar receitas desta frequência que podem ser feitas E não atingiram limite
+              const frequencyRecipes = recipes.filter(r => 
+                (r.frequency || r.priority) === frequency && 
+                canCookForSlots(r, workingInv, Math.ceil(people * r.days / r.serves)) &&
+                (recipeUsage[r.name] || 0) < (maxUsagePerRecipe[r.name] || 1)
+              );
+              
+              if(frequencyRecipes.length > 0){
+                // Sortear aleatoriamente entre as receitas disponíveis
+                const randomRecipe = frequencyRecipes[Math.floor(Math.random() * frequencyRecipes.length)];
+                candidate = {r: randomRecipe, cookingsNeeded: Math.ceil(people * randomRecipe.days / randomRecipe.serves)};
+                break;
+              }
             }
+            
             if(candidate){
               const remainingSlots = candidate.r.days -1;
               if(remainingSlots>0) activePrepared.push({recipe:candidate.r, remainingSlots});
