@@ -1,0 +1,4 @@
+melhorias pro app pwa
+
+agrupar os ingredientes com mesmo nome quando adicionados na dispensa 
+mudar a edição de receitas pro bloco de criar plano
