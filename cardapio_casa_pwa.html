@@ -287,6 +287,10 @@ let inventory = validateJSON(localStorage.getItem('cc_inv_pwa'));
 let recipes = validateJSON(localStorage.getItem('cc_rec_pwa'));
 let plan = validateJSON(localStorage.getItem('cc_plan_pwa'));
 
+// Migrar receitas existentes para ter campo frequency
+recipes = recipes.map(r => ({ ...r, frequency: r.frequency || r.priority }));
+saveAll();
+
 // Referências DOM
 const modalBack = qs('#modalBack');
 const modalContent = qs('#modalContent');
@@ -699,7 +703,7 @@ function showCurrentPlan(){
         day.forEach((meal,i)=> {
           const m = document.createElement('div'); m.style.marginTop='6px';
           const mealId = `day${idx}-meal${i}`;
-          m.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div style="flex:1"><strong>Refeição ${i+1}: ${meal.name}</strong><div class="small">${meal.suggested? 'Sugestão — faltam ingredientes':'Agendado'}</div></div></div>`;
+          m.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div style="flex:1">${meal.suggested? `<span style="color:#b47c00">${meal.name}</span>` : meal.name}</div></div>`;
           node.appendChild(m);
         });
         el.appendChild(node);
