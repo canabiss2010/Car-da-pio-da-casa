@@ -91,11 +91,22 @@
   </div>
 
 <script>
-// Core app logic (v7 corrigido): quatro blocos que abrem detalhes; densidades pré-carregadas.
-// Dados em localStorage: cc_inv_pwa, cc_rec_pwa, cc_plan_pwa
+// ================================================
+// CARDÁPIO DA CASA - PWA
+// Aplicativo para planejamento de refeições
+// Versão: 7 corrigido
+// Storage: cc_inv_pwa, cc_rec_pwa, cc_plan_pwa
+// ================================================
+
+// ================================================
+// VARIÁVEIS GLOBAIS E UTILITÁRIOS
+// ================================================
 const qs = s => document.querySelector(s);
 
-// DENSIDADES E CONVERSÕES (movido para o topo)
+// ================================================
+// SEÇÃO: DENSIDADES E CONVERSÕES DE UNIDADES
+// Usadas para converter ingredientes entre diferentes unidades
+// ================================================
 const densities = {
   "água":1,"agua":1,"leite":1,"oleo":0.92,"óleo":0.92,"acucar":0.85,"açúcar":0.85,"farinha":0.53,"farinha de trigo":0.53,
   "arroz":0.85,"feijao":0.7,"carne moida":0.95,"carne moída":0.95,"batata":0.65,"tomate":0.95,"aipim":0.6,"mandioquinha":0.6,
@@ -107,7 +118,16 @@ const defaults = {
   conv: { kg_to_g:1000, g_to_mg:1000, l_to_ml:1000, cup_ml:240, tbsp_ml:15, tsp_ml:5 }
 };
 
-// FUNÇÕES HELPER (movidas para o topo - CORREÇÃO CRÍTICA)
+// ================================================
+// SEÇÃO: FUNÇÕES HELPER - UTILITÁRIOS GERAIS
+// Funções auxiliares para processamento de dados
+// ================================================
+
+/**
+ * Normaliza unidades de medida para formato padrão
+ * @param {string} u - Unidade de medida original
+ * @return {string} Unidade normalizada
+ */
 function normalizeUnit(u){
   if(!u) return 'un';
   const key = u.toString().toLowerCase().replace(/\s+/g,'').replace(/[.,]/g,'').trim();
@@ -115,6 +135,11 @@ function normalizeUnit(u){
   return map[key]||key;
 }
 
+/**
+ * Processa linha de texto no formato "nome,quantidade,unidade"
+ * @param {string} line - Linha a ser processada
+ * @return {object|null} Objeto com {name, qty, unit} ou null se inválido
+ */
 function parseLine(line){
   const parts = line.split(',').map(s=>s.trim()).filter(Boolean);
   if(parts.length===0) return null;
@@ -123,6 +148,11 @@ function parseLine(line){
   return {name:parts[0].toLowerCase(), qty:qty, unit:normalizeUnit(parts[2]||'un')};
 }
 
+/**
+ * Retorna densidade para um ingrediente específico
+ * @param {string} name - Nome do ingrediente
+ * @return {number|null} Densidade ou null se não encontrada
+ */
 function densityFor(name){
   if(!name) return null;
   const k = name.toLowerCase().trim();
@@ -132,6 +162,13 @@ function densityFor(name){
   return null;
 }
 
+/**
+ * Converte quantidade para gramas
+ * @param {number} qty - Quantidade original
+ * @param {string} unit - Unidade original
+ * @param {string} name - Nome do ingrediente (para densidade)
+ * @return {number|null} Valor em gramas ou null se não conversível
+ */
 function toGrams(qty, unit, name){ 
   if(qty==null || isNaN(qty)) return null;
   const u = normalizeUnit(unit||'un');
@@ -147,7 +184,18 @@ function toGrams(qty, unit, name){
   return null;
 }
 
-// CORREÇÃO: Função canCookForSlots movida para o topo
+// ================================================
+// SEÇÃO: FUNÇÕES DE PLANEJAMENTO E CÁLCULO
+// Lógica para verificar disponibilidade e consumir ingredientes
+// ================================================
+
+/**
+ * Verifica se há ingredientes suficientes para cozinhar
+ * @param {object} rec - Receita a ser verificada
+ * @param {array} invCopy - Cópia do inventário
+ * @param {number} cookingsNeeded - Quantidade de cozimentos necessários
+ * @return {boolean} True se possível cozinhar
+ */
 function canCookForSlots(rec, invCopy, cookingsNeeded){
   for(const ing of rec.ingredients){
     const needTotalQty = ing.qty * cookingsNeeded;
@@ -164,6 +212,13 @@ function canCookForSlots(rec, invCopy, cookingsNeeded){
   return true;
 }
 
+/**
+ * Consome ingredientes do inventário após cozimento
+ * @param {object} rec - Receita utilizada
+ * @param {array} invCopy - Cópia do inventário
+ * @param {number} cookingsNeeded - Quantidade de cozimentos
+ * @return {array} Inventário atualizado
+ */
 function consumeCookingsInv(rec, invCopy, cookingsNeeded){
   const copy = invCopy.map(x=>({...x}));
   for(const ing of rec.ingredients){
@@ -200,7 +255,17 @@ function consumeCookingsInv(rec, invCopy, cookingsNeeded){
   return copy;
 }
 
-// VALIDAÇÃO DE DADOS (NOVO)
+// ================================================
+// SEÇÃO: VALIDAÇÃO E ARMAZENAMENTO DE DADOS
+// Funções para validar e gerenciar dados no localStorage
+// ================================================
+
+/**
+ * Valida dados JSON do localStorage
+ * @param {string} data - Dados a serem validados
+ * @param {array} defaultReturn - Valor padrão se inválido
+ * @return {array} Dados validados ou valor padrão
+ */
 function validateJSON(data, defaultReturn = []) {
   try {
     if (!data || data === 'null' || data === 'undefined') return defaultReturn;
@@ -212,16 +277,24 @@ function validateJSON(data, defaultReturn = []) {
   }
 }
 
-// STORAGE (com validação)
+// ================================================
+// SEÇÃO: INICIALIZAÇÃO E ESTADO DA APLICAÇÃO
+// Variáveis globais e configuração inicial
+// ================================================
+
+// Dados principais da aplicação
 let inventory = validateJSON(localStorage.getItem('cc_inv_pwa'));
 let recipes = validateJSON(localStorage.getItem('cc_rec_pwa'));
 let plan = validateJSON(localStorage.getItem('cc_plan_pwa'));
 
-// UI hooks
+// Referências DOM
 const modalBack = qs('#modalBack');
 const modalContent = qs('#modalContent');
 const alertsEl = qs('#alerts');
 
+/**
+ * Salva todos os dados no localStorage
+ */
 function saveAll(){
   try {
     localStorage.setItem('cc_inv_pwa', JSON.stringify(inventory));
@@ -233,7 +306,16 @@ function saveAll(){
   }
 }
 
-// Alerts management
+// ================================================
+// SEÇÃO: GERENCIAMENTO DE INTERFACE (UI)
+// Funções para modais, alertas e interações do usuário
+// ================================================
+
+/**
+ * Exibe mensagem de alerta para o usuário
+ * @param {string} text - Mensagem a ser exibida
+ * @param {string} level - Nível do alerta ('info', 'warn', 'error')
+ */
 function setAlert(text, level='info'){
   const msg = {text, level, time: new Date().toISOString()};
   const node = document.createElement('div'); node.textContent = `${text}`; node.style.marginTop='6px';
@@ -243,15 +325,30 @@ function setAlert(text, level='info'){
   alertsEl.prepend(node);
 }
 
-// Modal helpers
+/**
+ * Abre modal com título e conteúdo
+ * @param {string} title - Título do modal
+ * @param {string} contentHTML - Conteúdo HTML do modal
+ */
 function openModal(title, contentHTML){
   modalContent.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0">${title}</h2><button id="closeModal" class="btn-ghost">Fechar</button></div><div style="margin-top:12px">${contentHTML}</div>`;
   modalBack.style.display = 'flex';
   qs('#closeModal').addEventListener('click', ()=> closeModal());
 }
+
+/**
+ * Fecha modal atual
+ */
 function closeModal(){ modalBack.style.display='none'; modalContent.innerHTML=''; }
 
-// Build modal UIs para cada bloco
+// ================================================
+// SEÇÃO: MODAIS DE FUNCIONALIDADES
+// Funções para cada área do aplicativo
+// ================================================
+
+/**
+ * Abre modal de gerenciamento de inventário/dispensa
+ */
 function showInventory(){
   const html = `
     <div style="display:flex;gap:8px"><input id="m_invLine" placeholder="ex: arroz,2,kg" /><button id="m_addInv" class="btn-ghost">Adicionar</button></div>
@@ -295,6 +392,9 @@ function showInventory(){
   },50);
 }
 
+/**
+ * Abre modal de gerenciamento de receitas
+ */
 function showRecipes(){
   const html = `
     <label>Nome</label><input id="m_recName" placeholder="Carne moída e batata" />
@@ -372,6 +472,9 @@ function showRecipes(){
   },50);
 }
 
+/**
+ * Abre modal de criação de plano alimentar
+ */
 function showCreatePlan(){
   const html = `
     <div class="small">Ajuste as configurações e gere um plano automático. O sistema usa prioridades e durações (sobras).</div>
@@ -520,6 +623,9 @@ function showCreatePlan(){
   },100);
 }
 
+/**
+ * Abre modal de visualização do plano atual
+ */
 function showCurrentPlan(){
   const html = `<div id="m_currentList" class="list"></div><div style="display:flex;gap:8px;margin-top:8px"><button id="m_clearPlan" class="btn-ghost">Limpar plano</button><button id="m_exportPlan" class="btn-ghost">Exportar plano</button></div>`;
   openModal('Plano Atual', html);
@@ -699,7 +805,7 @@ function renderMainAlerts(){
 // render inicial
 renderMainAlerts();
 
-// Registrar service worker (usar caminho explícito)
+// Registrar service worker para PWA
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('./cardapio_sw.js').then(()=> console.log('SW registrado')).catch(()=> console.log('SW falhou'));
 }
