@@ -540,12 +540,19 @@ function showCurrentPlan(){
     };
     render();
     const el = qs('#m_currentList');
+    console.log('Elementos encontrados:', {
+      buttonsTrocar: el.querySelectorAll('button[data-day]').length,
+      mealsClickable: el.querySelectorAll('[data-meal-id]').length
+    });
     // Event listener para o botão "Trocar" de cada dia
     el.querySelectorAll('button[data-day]').forEach(btn => {
+      console.log('Adicionando listener ao botão do dia:', btn.dataset.day);
       btn.addEventListener('click', (e) => {
+        console.log('Botão Trocar clicado! Dia:', e.target.dataset.day);
         const dayIndex = parseInt(e.target.dataset.day);
         // Mostrar modo de seleção para este dia
         const dayElement = e.target.closest('div').querySelectorAll('[data-meal-id]');
+        console.log('Elementos de refeição encontrados:', dayElement.length);
         dayElement.forEach(el => {
           el.style.background = '#f0f9ff';
           el.style.border = '1px dashed #3b82f6';
@@ -557,7 +564,9 @@ function showCurrentPlan(){
     });
     // Event listener para clicar nas refeições
     el.querySelectorAll('[data-meal-id]').forEach(mealEl => {
+      console.log('Adicionando listener à refeição:', mealEl.dataset.mealId, 'dia:', mealEl.dataset.day);
       mealEl.addEventListener('click', (e) => {
+        console.log('Refeição clicada! Dia:', e.target.dataset.day, 'Refeição:', e.target.dataset.meal);
         const dayIndex = parseInt(e.target.dataset.day);
         const mealIndex = parseInt(e.target.dataset.meal);
         showRecipeSelector(dayIndex, mealIndex);
