@@ -4,3 +4,21 @@ agrupar os ingredientes com mesmo nome quando adicionados na dispensa
 mudar a edição de receitas pro bloco de criar plano
 tirar a opcao de adicionar um ingrediente por vez
 tem q explicar oq significa a sujestão em laranja
+
+Plano de Implementação do codgo de barras
+1. Configuração Inicial
+ Adicionar biblioteca de leitura de códigos de barras (sugiro o quagga.js ou zxing-js)
+ Criar um botão "Ler Código de Barras" no modal de inventário
+ Adicionar área de visualização da câmera
+2. Implementação da Leitura
+ Criar função para iniciar a câmera
+ Configurar o leitor de códigos de barras
+ Processar o código lido e buscar o produto correspondente
+3. Integração com o Inventário
+ Criar função para buscar produto pelo código de barras
+ Adicionar produto ao inventário automaticamente
+ Atualizar a interface do usuário
+4. Melhorias de UX
+ Adicionar feedback visual durante a leitura
+ Tratar erros (câmera não disponível, código não reconhecido, etc.)
+ Permitir adição manual se o código não for reconhecido
