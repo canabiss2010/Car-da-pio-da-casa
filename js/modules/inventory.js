@@ -2,6 +2,19 @@
 import { qs, parseLine } from './utils.js';
 import { openModal, setAlert } from './ui.js';
 
+function groupItems(items) {
+  const grouped = {};
+  items.forEach(item => {
+    const key = `${item.name.toLowerCase()}_${item.unit}`;
+    if (!grouped[key]) {
+      grouped[key] = { ...item };
+    } else {
+      grouped[key].qty += item.qty;
+    }
+  });
+  return Object.values(grouped);
+}
+
 export function showInventory() {
   const html = `
     <div style="display:flex;gap:8px">
@@ -20,6 +33,7 @@ export function showInventory() {
   openModal('Dispensa', html);
   renderList();
 }
+
 function renderList() {
   const el = qs('#m_invList'); 
   el.innerHTML = '';
@@ -29,41 +43,56 @@ function renderList() {
     return;
   }
   
-  window.inventory.forEach((item, idx) => {
+  const groupedItems = groupItems(window.inventory);
+  
+  groupedItems.forEach((item, idx) => {
     const node = document.createElement('div'); 
     node.className = 'item';
     node.innerHTML = `
       <div style="max-width:70%">
         <strong style="text-transform:capitalize">${item.name}</strong>
-        <div class="small">${item.qty} ${item.unit}</div>
+        <div class="small">${item.qty.toFixed(2)} ${item.unit} (${window.inventory.filter(i => 
+          i.name.toLowerCase() === item.name.toLowerCase() && i.unit === item.unit
+        ).length} itens)</div>
       </div>
       <div>
-        <button data-idx="${idx}" class="btn-ghost">Remover</button>
+        <button data-name="${item.name}" data-unit="${item.unit}" class="btn-ghost">Remover</button>
       </div>
     `;
     el.appendChild(node);
   });
 
-  // Eventos dos botões de remover
-  el.querySelectorAll('button[data-idx]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const idx = Number(btn.dataset.idx);
-      const name = window.inventory[idx]?.name || 'item';
-      window.inventory.splice(idx, 1);
+  el.querySelectorAll('button[data-name]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const name = btn.dataset.name;
+      const unit = btn.dataset.unit;
+      window.inventory = window.inventory.filter(i => 
+        !(i.name.toLowerCase() === name.toLowerCase() && i.unit === unit)
+      );
       window.saveAll();
       renderList();
-      setAlert(`Item removido: ${name}`);
+      setAlert(`Todos os ${name} foram removidos`);
     });
   });
 }
+
 // Adicionar item único
 document.addEventListener('click', (e) => {
   if (e.target.id === 'm_addInv') {
     const input = qs('#m_invLine').value.trim();
-    if (!input) return alert('Digite: nome,quantidade,unidade');
-    
+    if (!input) {
+      setAlert('Digite: nome,quantidade,unidade', 'error');
+      return;
+    }
+
     const item = parseLine(input);
-    if (!item) return alert('Formato inválido. Use: nome,quantidade,unidade');
+    if (!item) {
+      setAlert('Formato inválido. Use: nome,quantidade,unidade', 'error');
+      return;
+    }
+
+    // Padroniza o nome
+    item.name = item.name.toLowerCase().trim();
     
     window.inventory.push(item);
     window.saveAll();
@@ -72,12 +101,18 @@ document.addEventListener('click', (e) => {
     setAlert(`Item adicionado: ${item.name}`);
   }
 
-  // Adicionar vários itens
+  // Adicionar múltiplos itens
   if (e.target.id === 'm_paste') {
-    const text = qs('#m_invBulk').value.trim();
-    if (!text) return alert('Cole as linhas com os itens');
+    const textarea = qs('#m_invBulk');
+    const text = textarea.value.trim();
     
-    const lines = text.split('\n')
+    if (!text) {
+      setAlert('Cole as linhas com os itens', 'error');
+      return;
+    }
+    
+    const lines = text
+      .split('\n')
       .map(line => line.trim())
       .filter(Boolean);
     
@@ -85,15 +120,21 @@ document.addEventListener('click', (e) => {
     lines.forEach(line => {
       const item = parseLine(line);
       if (item) {
+        // Padroniza o nome
+        item.name = item.name.toLowerCase().trim();
         window.inventory.push(item);
         added++;
       }
     });
     
-    window.saveAll();
-    qs('#m_invBulk').value = '';
-    renderList();
-    setAlert(`Adicionados ${added} itens`);
+    if (added > 0) {
+      window.saveAll();
+      textarea.value = '';
+      renderList();
+      setAlert(`Adicionados ${added} itens`);
+    } else {
+      setAlert('Nenhum item válido encontrado', 'error');
+    }
   }
 
   // Limpar inventário

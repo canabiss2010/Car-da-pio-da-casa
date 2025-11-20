@@ -40,13 +40,19 @@ export function toGrams(qty, unit, name) {
   }
 }
 
-// Processa linha de texto
 export function parseLine(line) {
   const parts = line.split(',').map(s => s.trim()).filter(Boolean);
   if (parts.length === 0) return null;
-  if (parts.length === 1) return { name: parts[0].toLowerCase(), qty: 1, unit: 'un' };
-  const qty = parseFloat(parts[1]) || 0;
-  return { name: parts[0].toLowerCase(), qty, unit: normalizeUnit(parts[2] || 'un') };
+  if (parts.length === 1) return { name: parts[0].toLowerCase().trim(), qty: 1, unit: 'un' };
+  
+  const qty = parseFloat(parts[1].replace(',', '.')) || 0;
+  const unit = normalizeUnit(parts[2] || 'un');
+  
+  return { 
+    name: parts[0].toLowerCase().trim(), 
+    qty, 
+    unit 
+  };
 }
 
 // Valida JSON
