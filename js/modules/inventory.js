@@ -95,113 +95,130 @@ function startBarcodeScanner() {
 
   openModal('Escanear Código de Barras', modalContent);
   
-  // Configuração do Quagga
-  // Configuração do Quagga
   console.log('Iniciando scanner...');
-  Quagga.init({
+  console.log('Elemento #interactive encontrado:', !!document.querySelector('#interactive'));
+  
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    console.error('Seu navegador não suporta a API de mídia necessária');
+    return;
+  }
+
+  const config = {
     inputStream: {
       name: "Live",
       type: "LiveStream",
       target: document.querySelector('#interactive'),
       constraints: {
-        width: 480,
-        height: 320,
+        width: 640,
+        height: 480,
         facingMode: "environment"
       },
     },
+    locator: {
+      patchSize: "large",
+      halfSample: true
+    },
     decoder: {
-      readers: [
-        "ean_reader",
-        "code_128_reader",
-        "code_39_reader"
-      ]
+      readers: ["ean_reader", "code_128_reader"]
+    },
+    debug: {
+      drawBoundingBox: true,
+      showGrid: true,
+      showPatches: true,
+      showFoundPatches: true,
+      showSkeleton: true
     }
-  }, function(err) {
+  };
+
+  console.log('Inicializando Quagga...');
+  Quagga.init(config, function(err) {
     if (err) {
       console.error('Erro ao inicializar Quagga:', err);
-      document.getElementById('scannerError').textContent = 'Erro ao iniciar a câmera: ' + (err.message || 'Erro desconhecido');
-      document.getElementById('scannerError').style.display = 'block';
       return;
     }
-    console.log("Inicialização concluída. Iniciando scanner...");
-    Quagga.start().then(() => {
-      console.log('Scanner iniciado com sucesso');
-    }).catch(err => {
-      console.error('Erro ao iniciar scanner:', err);
+    
+    console.log('Quagga inicializado. Iniciando scanner...');
+    Quagga.start();
+    
+    // Contador de frames processados
+    let frameCount = 0;
+    Quagga.onProcessed(function(result) {
+      frameCount++;
+      if (frameCount % 10 === 0) {
+        console.log('Frames processados:', frameCount);
+      }
     });
-  });
 
-  // Quando um código for detectado
-  Quagga.onDetected(async function(result) {
-    console.log('Resultado bruto:', result);
-    if (!result || !result.codeResult) {
-      console.error('Nenhum código válido detectado');
-      return;
-    }
+    // Único manipulador de detecção
+    Quagga.onDetected(async function(result) {
+      console.log('Código detectado!', result);
+      if (!result || !result.codeResult) {
+        console.error('Nenhum código válido detectado');
+        return;
+      }
 
-    const code = result.codeResult.code;
-    console.log("Código detectado:", code);
-    
-    // Para a câmera
-    Quagga.stop();
-    document.getElementById('interactive').style.display = 'none';
-    document.getElementById('stopScanner').style.display = 'none';
-    
-    try {
-      console.log('Buscando produto na API...');
-      const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json`);
-      console.log('Resposta da API:', response.status);
-      const data = await response.json();
+      const code = result.codeResult.code;
+      console.log("Código detectado:", code);
       
-      if (data.status === 1) {
-        const product = data.product;
-        document.getElementById('productInfo').style.display = 'block';
-        document.getElementById('productName').textContent = product.product_name || 'Produto não identificado';
-        document.getElementById('productBrand').textContent = product.brands || '';
+      // Para a câmera
+      Quagga.stop();
+      document.getElementById('interactive').style.display = 'none';
+      document.getElementById('stopScanner').style.display = 'none';
+      
+      try {
+        console.log('Buscando produto na API...');
+        const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json`);
+        console.log('Resposta da API:', response.status);
+        const data = await response.json();
         
-        // Configura o botão de adicionar
+        if (data.status === 1) {
+          const product = data.product;
+          document.getElementById('productInfo').style.display = 'block';
+          document.getElementById('productName').textContent = product.product_name || 'Produto não identificado';
+          document.getElementById('productBrand').textContent = product.brands || '';
+          
+          // Configura o botão de adicionar
+          document.getElementById('addScannedProduct').onclick = () => {
+            const qty = document.getElementById('productQty').value;
+            const unit = document.getElementById('productUnit').value;
+            const name = product.product_name || 'Produto desconhecido';
+            
+            window.inventory.push({ name, qty: parseFloat(qty), unit });
+            localStorage.setItem('inventory', JSON.stringify(window.inventory));
+            
+            // Fecha o modal e atualiza a lista
+            document.querySelector('.modal-back').click();
+            showInventory();
+            setAlert('Produto adicionado com sucesso!', 'success');
+          };
+        } else {
+          throw new Error('Produto não encontrado');
+        }
+      } catch (error) {
+        console.error('Erro ao buscar produto:', error);
+        document.getElementById('scannerError').textContent = 
+          'Não foi possível encontrar o produto. Por favor, adicione manualmente.';
+        document.getElementById('scannerError').style.display = 'block';
+        
+        document.getElementById('productInfo').style.display = 'block';
+        document.getElementById('productName').textContent = 'Produto não encontrado';
+        document.getElementById('productBrand').textContent = 'Adicione as informações manualmente';
+        
         document.getElementById('addScannedProduct').onclick = () => {
           const qty = document.getElementById('productQty').value;
           const unit = document.getElementById('productUnit').value;
-          const name = product.product_name || 'Produto desconhecido';
+          const name = prompt('Digite o nome do produto:') || 'Produto desconhecido';
           
-          // Adiciona ao inventário
-          window.inventory.push({ name, qty: parseFloat(qty), unit });
-          localStorage.setItem('inventory', JSON.stringify(window.inventory));
-          
-          // Fecha o modal e atualiza a lista
-          document.querySelector('.modal-back').click();
-          showInventory();
-          setAlert('Produto adicionado com sucesso!', 'success');
+          if (name) {
+            window.inventory.push({ name, qty: parseFloat(qty), unit });
+            localStorage.setItem('inventory', JSON.stringify(window.inventory));
+            document.querySelector('.modal-back').click();
+            showInventory();
+            setAlert('Produto adicionado com sucesso!', 'success');
+          }
         };
-      } else {
-        throw new Error('Produto não encontrado');
       }
-    } catch (error) {
-      console.error('Erro ao buscar produto:', error);
-      document.getElementById('scannerError').textContent = 
-        'Não foi possível encontrar o produto. Por favor, adicione manualmente.';
-      document.getElementById('scannerError').style.display = 'block';
-      
-      // Mostra o formulário para adicionar manualmente
-      document.getElementById('productInfo').style.display = 'block';
-      document.getElementById('productName').textContent = 'Produto não encontrado';
-      document.getElementById('productBrand').textContent = 'Adicione as informações manualmente';
-      
-      document.getElementById('addScannedProduct').onclick = () => {
-        const qty = document.getElementById('productQty').value;
-        const unit = document.getElementById('productUnit').value;
-        const name = prompt('Digite o nome do produto:') || 'Produto desconhecido';
-        
-        if (name) {
-          window.inventory.push({ name, qty: parseFloat(qty), unit });
-          localStorage.setItem('inventory', JSON.stringify(window.inventory));
-          document.querySelector('.modal-back').click();
-          showInventory();
-          setAlert('Produto adicionado com sucesso!', 'success');
-        }
-      };
-    }
+    });
   });
 
   // Botão para parar o scanner
