@@ -1,8 +1,18 @@
+// Configurações da Aplicação
+export const APP_CONFIG = {
+  APP_NAME: 'CardápioCasa',
+  VERSION: '1.0.0',
+  DEBUG: false, // Altere para true durante o desenvolvimento
+  CACHE_NAME: 'cardapio-casa-v1',
+  API_URL: ''
+};
+
 // Constantes de armazenamento
 export const STORAGE_KEYS = {
   INVENTORY: 'cc_inv_pwa',
   RECIPES: 'cc_rec_pwa',
-  PLAN: 'cc_plan_pwa'
+  PLAN: 'cc_plan_pwa',
+  SETTINGS: 'cc_settings_pwa'
 };
 
 // Densidades para conversão de unidades
@@ -26,5 +36,10 @@ export const DEFAULTS = {
     cup_ml: 240, 
     tbsp_ml: 15, 
     tsp_ml: 5 
+  },
+  recipe: {
+    defaultServings: 4,
+    defaultPriority: 5,
+    defaultDays: 2
   }
 };

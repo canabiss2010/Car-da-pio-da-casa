@@ -9,23 +9,54 @@ export function showCreatePlan() {
     </div>
     <div style="display:grid;gap:12px">
       <div>
-        <label>Número de Pessoas</label>
-        <input id="m_people" type="number" min="1" value="4" />
+        <label for="m_people">Número de Pessoas</label>
+        <input 
+          id="m_people" 
+          type="number" 
+          min="1" 
+          max="20" 
+          value="4" 
+          aria-required="true"
+          aria-label="Número de pessoas que irão consumir as refeições"
+        />
       </div>
       <div>
-        <label>Dias do Plano</label>
-        <input id="m_days" type="number" min="1" max="14" value="7" />
+        <label for="m_days">Dias do Plano</label>
+        <input 
+          id="m_days" 
+          type="number" 
+          min="1" 
+          max="14" 
+          value="7" 
+          aria-required="true"
+          aria-label="Número de dias do plano"
+        />
       </div>
       <div>
-        <label>Refeições por Dia</label>
-        <select id="m_meals">
+        <label for="m_meals">Refeições por Dia</label>
+        <select 
+          id="m_meals"
+          aria-label="Quantidade de refeições por dia"
+        >
           <option value="2">2 (Almoço e Jantar)</option>
           <option value="3">3 (Café, Almoço e Jantar)</option>
         </select>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px">
-        <button id="m_genPlan" class="btn">Gerar Plano</button>
-        <button id="m_sim" class="btn-ghost">Simular</button>
+        <button 
+          id="m_genPlan" 
+          class="btn"
+          aria-label="Gerar plano de refeições"
+        >
+          Gerar Plano
+        </button>
+        <button 
+          id="m_sim" 
+          class="btn-ghost"
+          aria-label="Simular plano sem salvar"
+        >
+          Simular
+        </button>
       </div>
     </div>
     <div id="m_planPreview" style="margin-top:16px"></div>
@@ -48,8 +79,18 @@ function generatePlan() {
   const days = parseInt(qs('#m_days').value) || 7;
   const mealsPerDay = parseInt(qs('#m_meals').value) || 2;
   
+  // Validação básica
   if (!window.recipes || window.recipes.length === 0) {
     return UI.setAlert('Adicione receitas primeiro!', 'error');
+  }
+  
+  // Valida se há receitas suficientes
+  const minRecipesNeeded = Math.min(mealsPerDay, window.recipes.length);
+  if (window.recipes.length < minRecipesNeeded) {
+    return UI.setAlert(
+      `Você precisa adicionar pelo menos ${minRecipesNeeded} receitas para gerar o plano.`,
+      'error'
+    );
   }
 
   const plan = [];
@@ -188,8 +229,8 @@ export function showCurrentPlan() {
   const html = `
     <div id="m_currentPlan" style="margin-bottom:16px"></div>
     <div style="display:flex;gap:8px">
-      <button id="m_exportPlan" class="btn-ghost">Exportar</button>
-      <button id="m_clearPlan" class="btn-ghost">Limpar Plano</button>
+      <button id="m_exportPlan" class="btn-ghost" aria-label="Exportar plano de refeições">Exportar</button>
+      <button id="m_clearPlan" class="btn-ghost" aria-label="Limpar plano de refeições">Limpar Plano</button>
     </div>
   `;
 
@@ -203,16 +244,22 @@ export function showCurrentPlan() {
     
     if (exportBtn) {
       exportBtn.addEventListener('click', () => {
-        const dataStr = JSON.stringify(window.plan, null, 2);
-        const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-        const exportName = `plano-${new Date().toISOString().split('T')[0]}.json`;
-        
-        const linkElement = document.createElement('a');
-        linkElement.setAttribute('href', dataUri);
-        linkElement.setAttribute('download', exportName);
-        linkElement.click();
-        
-        UI.setAlert('Plano exportado com sucesso!');
+        try {
+          const dataStr = JSON.stringify(window.plan, null, 2);
+          const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+          const exportName = `plano-${new Date().toISOString().split('T')[0]}.json`;
+          
+          const linkElement = document.createElement('a');
+          linkElement.setAttribute('href', dataUri);
+          linkElement.setAttribute('download', exportName);
+          linkElement.setAttribute('aria-label', 'Exportar plano de refeições');
+          linkElement.click();
+          
+          UI.setAlert('Plano exportado com sucesso!');
+        } catch (error) {
+          console.error('Erro ao exportar plano:', error);
+          UI.setAlert('Erro ao exportar o plano. Tente novamente.', 'error');
+        }
       });
     }
 

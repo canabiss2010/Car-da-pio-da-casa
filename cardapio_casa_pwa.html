@@ -2,54 +2,177 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>CardápioCasa — PWA</title>
-  <link rel="stylesheet" href="css/styles.css">
-  <link rel="manifest" href="cardapio_manifest.json">
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍽️</text></svg>">
+  
+  <!-- Meta tags para PWA -->
   <meta name="theme-color" content="#1F6F3B"/>
+  <meta name="description" content="Aplicativo de planejamento de cardápio para gerenciar receitas, estoque e criar planos de refeições.">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CardápioCasa">
+  
+  <!-- Ícones para PWA -->
+  <link rel="manifest" href="cardapio_manifest.json">
+  <link rel="icon" type="image/png" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍽️</text></svg>">
+  <meta name="theme-color" content="#1F6F3B">
+  
+  <!-- Estilos -->
+  <link rel="stylesheet" href="css/styles.css">
+  
+  <!-- Preload de recursos críticos -->
+  <link rel="preload" href="js/app.js" as="script" crossorigin="anonymous">
+  <link rel="preload" href="css/styles.css" as="style">
+  
+  <style>
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.9);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .loading-spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #1F6F3B;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin-bottom: 16px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+  </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <div class="logo"></div>
+  <!-- Aviso de carregamento -->
+  <div id="loading" class="loading-overlay" aria-live="polite" aria-busy="true">
+    <div class="loading-spinner"></div>
+    <p>Carregando...</p>
+  </div>
+
+  <div class="wrap" aria-hidden="true">
+    <header role="banner">
+      <div class="logo" aria-hidden="true" style="width: 48px; height: 48px; background-color: #1F6F3B; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px;">🍽️</div>
       <div>
         <h1>CardápioCasa</h1>
         <p class="subtitle">Planejamento rápido para sua casa</p>
       </div>
     </header>
 
-    <div class="grid" id="mainGrid">
-      <div class="block" id="b-inv" data-key="inv">
-        <h3>Dispensa</h3>
-        <p>Adicionar e visualizar seu estoque</p>
+    <main id="main-content" role="main">
+      <div class="grid" id="mainGrid">
+        <div class="block" id="b-inv" tabindex="0" role="button" aria-labelledby="inv-title inv-desc">
+          <h3 id="inv-title">Dispensa</h3>
+          <p id="inv-desc">Adicionar e visualizar seu estoque</p>
+        </div>
+        
+        <div class="block" id="b-rec" tabindex="0" role="button" aria-labelledby="rec-title rec-desc">
+          <h3 id="rec-title">Receitas</h3>
+          <p id="rec-desc">Cadastrar e priorizar receitas</p>
+        </div>
+        
+        <div class="block" id="b-create" tabindex="0" role="button" aria-labelledby="create-title create-desc">
+          <h3 id="create-title">Criar Plano</h3>
+          <p id="create-desc">Gerar plano automático</p>
+        </div>
+        
+        <div class="block" id="b-current" tabindex="0" role="button" aria-labelledby="current-title current-desc">
+          <h3 id="current-title">Plano Atual</h3>
+          <p id="current-desc">Ver plano gerado</p>
+        </div>
       </div>
-      <div class="block" id="b-rec" data-key="rec">
-        <h3>Receitas</h3>
-        <p>Cadastrar e priorizar receitas</p>
-      </div>
-      <div class="block" id="b-create" data-key="create">
-        <h3>Criar Plano</h3>
-        <p>Gerar plano automático</p>
-      </div>
-      <div class="block" id="b-current" data-key="current">
-        <h3>Plano Atual</h3>
-        <p>Ver plano gerado</p>
-      </div>
-    </div>
 
-    <div class="alerts full" id="alertsBox">
-      <strong style="color:var(--accent)">Avisos</strong>
-      <div id="alerts" style="margin-top:8px" class="small">Nenhum aviso por enquanto.</div>
-    </div>
+      <div class="alerts full" id="alertsBox" role="alert" aria-live="polite">
+        <strong style="color:var(--accent)">Avisos</strong>
+        <div id="alerts" style="margin-top:8px" class="small">Nenhum aviso por enquanto.</div>
+      </div>
+    </main>
 
-    <footer>Toque nos blocos para abrir cada área. App pronto como PWA (instalável).</footer>
+    <footer role="contentinfo">
+      <p>Toque nos blocos para abrir cada área. App pronto como PWA (instalável).</p>
+      <p class="small">Versão 1.0.0</p>
+    </footer>
   </div>
 
-  <!-- modal container -->
-  <div class="modal-back" id="modalBack" role="dialog" aria-modal="true">
-    <div class="modal" id="modalContent"></div>
+  <!-- Modal -->
+  <div class="modal-back" id="modalBack" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="modalTitle" aria-describedby="modalDesc">
+    <div class="modal" id="modalContent" role="document">
+      <h2 id="modalTitle" class="visually-hidden">Janela de diálogo</h2>
+      <p id="modalDesc" class="visually-hidden">Conteúdo da janela de diálogo</p>
+      <!-- O conteúdo será inserido aqui dinamicamente -->
+    </div>
   </div>
-  <script src="js/app.js"></script>
+
+  <!-- Scripts -->
+  <script>
+    // Esconde o aviso de carregamento quando a página estiver pronta
+    document.addEventListener('DOMContentLoaded', () => {
+      const loading = document.getElementById('loading');
+      if (loading) {
+        loading.style.display = 'none';
+      }
+      const wrap = document.querySelector('.wrap');
+      if (wrap) {
+        wrap.setAttribute('aria-hidden', 'false');
+      }
+      
+      // Adiciona classes para estilização dos blocos
+      document.querySelectorAll('.block').forEach(block => {
+        block.classList.add('interactive');
+      });
+    });
+    
+    // Registra o Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('cardapio_sw.js')
+          .then(registration => {
+            console.log('ServiceWorker registrado com sucesso:', registration.scope);
+          })
+          .catch(error => {
+            console.error('Falha ao registrar ServiceWorker:', error);
+          });
+      });
+    }
+  </script>
+  
+  <!-- Módulos JavaScript -->
+  <script type="module" src="js/app.js"></script>
+  
+  <!-- Fallback para navegadores sem suporte a módulos -->
+  <script nomodule>
+    const fallback = document.createElement('div');
+    fallback.style.padding = '2rem';
+    fallback.style.textAlign = 'center';
+    fallback.style.fontFamily = 'sans-serif';
+    fallback.innerHTML = `
+      <h1>Navegador não suportado</h1>
+      <p>Este aplicativo requer um navegador moderno com suporte a módulos JavaScript.</p>
+      <p>Por favor, atualize seu navegador ou use uma versão mais recente.</p>
+    `;
+    document.body.innerHTML = '';
+    document.body.appendChild(fallback);
+  </script>
 </body>
 </html>
