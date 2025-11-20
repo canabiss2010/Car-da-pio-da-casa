@@ -1,6 +1,6 @@
 // js/modules/planning.js
 import { qs } from './utils.js';
-import { UI } from './ui.js';
+import { openModal, closeModal, setAlert } from './ui.js';
 
 export function showCreatePlan() {
   const html = `
@@ -31,7 +31,7 @@ export function showCreatePlan() {
     <div id="m_planPreview" style="margin-top:16px"></div>
   `;
 
-  UI.openModal('Criar Plano', html);
+  openModal('Criar Plano', html);
   
   // Adiciona os event listeners após o modal ser renderizado
   setTimeout(() => {
@@ -49,7 +49,7 @@ function generatePlan() {
   const mealsPerDay = parseInt(qs('#m_meals').value) || 2;
   
   if (!window.recipes || window.recipes.length === 0) {
-    return UI.setAlert('Adicione receitas primeiro!', 'error');
+    return setAlert('Adicione receitas primeiro!', 'error');
   }
 
   const plan = [];
@@ -87,7 +87,7 @@ function generatePlan() {
   window.plan = plan;
   window.saveAll();
   showPlanPreview(plan, qs('#m_people').value || 4, true);
-  UI.setAlert('Plano gerado com sucesso!');
+  setAlert('Plano gerado com sucesso!');
 }
 
 function simulatePlan() {
@@ -96,7 +96,7 @@ function simulatePlan() {
   const mealsPerDay = parseInt(qs('#m_meals').value) || 2;
   
   if (!window.recipes || window.recipes.length === 0) {
-    return UI.setAlert('Adicione receitas primeiro!', 'error');
+    return setAlert('Adicione receitas primeiro!', 'error');
   }
 
   const plan = [];
@@ -132,7 +132,7 @@ function simulatePlan() {
   }
 
   showPlanPreview(plan, qs('#m_people').value || 4, false);
-  UI.setAlert('Simulação concluída. Para aplicar o plano, clique em "Gerar Plano".');
+  setAlert('Simulação concluída. Para aplicar o plano, clique em "Gerar Plano".');
 }
 
 function showPlanPreview(plan, people, isRealPlan) {
@@ -173,15 +173,15 @@ function showPlanPreview(plan, people, isRealPlan) {
 
     saveButton.querySelector('#m_savePlan').addEventListener('click', () => {
       window.saveAll();
-      UI.closeModal();
-      UI.setAlert('Plano salvo com sucesso!');
+      closeModal();
+      setAlert('Plano salvo com sucesso!');
     });
   }
 }
 
 export function showCurrentPlan() {
   if (!window.plan || window.plan.length === 0) {
-    return UI.openModal('Plano Atual', '<p>Nenhum plano gerado ainda.</p>');
+    return openModal('Plano Atual', '<p>Nenhum plano gerado ainda.</p>');
   }
 
   const people = 4;
@@ -193,7 +193,7 @@ export function showCurrentPlan() {
     </div>
   `;
 
-  UI.openModal('Plano Atual', html);
+  openModal('Plano Atual', html);
   showPlanPreview(window.plan, people, true);
 
   // Adiciona os event listeners após o modal ser renderizado
@@ -212,7 +212,7 @@ export function showCurrentPlan() {
         linkElement.setAttribute('download', exportName);
         linkElement.click();
         
-        UI.setAlert('Plano exportado com sucesso!');
+        setAlert('Plano exportado com sucesso!');
       });
     }
 
@@ -221,8 +221,8 @@ export function showCurrentPlan() {
         if (confirm('Tem certeza que deseja limpar o plano atual?')) {
           window.plan = [];
           window.saveAll();
-          UI.closeModal();
-          UI.setAlert('Plano limpo com sucesso!');
+          closeModal();
+          setAlert('Plano limpo com sucesso!');
         }
       });
     }

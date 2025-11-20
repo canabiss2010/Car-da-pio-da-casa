@@ -1,6 +1,6 @@
 import { qs } from './utils.js';
 
-let modalBack, modalContent, alertsEl;
+let modalBack, modalContent, alertsEl, loadingElement;
 
 export function initUI() {
   modalBack = qs('#modalBack');
@@ -34,4 +34,30 @@ export function setAlert(text, level = 'info') {
   node.style.marginTop = '6px';
   node.style.color = colors[level] || colors.info;
   alertsEl.prepend(node);
+}
+
+export function showLoading() {
+  if (!loadingElement) {
+    loadingElement = document.createElement('div');
+    loadingElement.id = 'loading';
+    loadingElement.style.position = 'fixed';
+    loadingElement.style.top = '50%';
+    loadingElement.style.left = '50%';
+    loadingElement.style.transform = 'translate(-50%, -50%)';
+    loadingElement.style.padding = '20px';
+    loadingElement.style.background = 'rgba(0,0,0,0.7)';
+    loadingElement.style.color = 'white';
+    loadingElement.style.borderRadius = '5px';
+    loadingElement.style.zIndex = '1000';
+    loadingElement.textContent = 'Carregando...';
+    document.body.appendChild(loadingElement);
+  } else {
+    loadingElement.style.display = 'block';
+  }
+}
+
+export function hideLoading() {
+  if (loadingElement) {
+    loadingElement.style.display = 'none';
+  }
 }

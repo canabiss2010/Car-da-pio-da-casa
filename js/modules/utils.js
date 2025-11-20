@@ -60,3 +60,10 @@ export function validateJSON(data, defaultReturn = []) {
     return defaultReturn;
   }
 }
+
+// Obtém o nome formatado do ingrediente
+export function getIngredientName(ingredient) {
+  if (!ingredient) return '';
+  if (typeof ingredient === 'string') return ingredient;
+  return ingredient.name || '';
+}

@@ -2,7 +2,6 @@
 import { STORAGE_KEYS } from './config.js';
 import * as UI from './modules/ui.js';
 import { qs, validateJSON } from './modules/utils.js';
-
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
   console.log('App inicializado!');
@@ -59,11 +58,11 @@ async function loadModule(modulePath, callback) {
 function setupEventListeners() {
   // Blocos principais
   const buttons = {
-    '#b-inv': './modules/inventory.js',
-    '#b-rec': './modules/recipes.js',
-    '#b-create': './modules/planning.js',
-    '#b-current': './modules/planning.js'
-  };
+  '#b-inv': './modules/inventory.js',
+  '#b-rec': './modules/recipes.js',
+  '#b-create': './modules/planning.js',
+  '#b-current': './modules/planning.js'
+};
 
   Object.entries(buttons).forEach(([selector, modulePath]) => {
     const button = qs(selector);

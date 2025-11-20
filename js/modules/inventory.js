@@ -1,6 +1,6 @@
 // js/modules/inventory.js
 import { qs, parseLine } from './utils.js';
-import { UI } from './ui.js';
+import { openModal, setAlert } from './ui.js';
 
 export function showInventory() {
   const html = `
@@ -17,7 +17,7 @@ export function showInventory() {
     <div id="m_invList" class="list" style="margin-top:12px"></div>
   `;
   
-  UI.openModal('Dispensa', html);
+  openModal('Dispensa', html);
   renderList();
 }
 function renderList() {
@@ -52,7 +52,7 @@ function renderList() {
       window.inventory.splice(idx, 1);
       window.saveAll();
       renderList();
-      UI.setAlert(`Item removido: ${name}`);
+      setAlert(`Item removido: ${name}`);
     });
   });
 }
@@ -69,7 +69,7 @@ document.addEventListener('click', (e) => {
     window.saveAll();
     qs('#m_invLine').value = '';
     renderList();
-    UI.setAlert(`Item adicionado: ${item.name}`);
+    setAlert(`Item adicionado: ${item.name}`);
   }
 
   // Adicionar vários itens
@@ -93,7 +93,7 @@ document.addEventListener('click', (e) => {
     window.saveAll();
     qs('#m_invBulk').value = '';
     renderList();
-    UI.setAlert(`Adicionados ${added} itens`);
+    setAlert(`Adicionados ${added} itens`);
   }
 
   // Limpar inventário
@@ -102,6 +102,6 @@ document.addEventListener('click', (e) => {
     window.inventory = [];
     window.saveAll();
     renderList();
-    UI.setAlert('Inventário limpo');
+    setAlert('Inventário limpo');
   }
 });

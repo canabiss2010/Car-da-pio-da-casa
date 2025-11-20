@@ -1,7 +1,7 @@
 // js/modules/recipes.js
-import { qs } from './utils.js';
-import { UI } from './ui.js';
-
+import { qs, getIngredientName } from './utils.js';
+import { openModal, closeModal, setAlert } from './ui.js';
+let currentEditIndex = -1;
 export function showRecipes() {
   const html = `
     <div style="margin-bottom: 16px">
@@ -23,7 +23,7 @@ export function showRecipes() {
     <div id="m_recList" class="list"></div>
   `;
 
-  UI.openModal('Receitas', html);
+  openModal('Receitas', html);
   renderRecipeList();
 }
 function renderRecipeList() {
@@ -66,7 +66,7 @@ function renderRecipeList() {
           window.recipes.splice(idx, 1);
           window.saveAll();
           renderRecipeList();
-          UI.setAlert(`Receita excluída: ${name}`);
+          setAlert(`Receita excluída: ${name}`);
         }
       } else if (action === 'edit') {
         loadRecipeForEdit(idx);
@@ -88,7 +88,8 @@ function loadRecipeForEdit(idx) {
   window.recipes.splice(idx, 1);
   window.saveAll();
   renderRecipeList();
-  UI.setAlert(`Editando: ${recipe.name}. Faça as alterações e clique em Salvar.`);
+  setAlert(`Editando: ${recipe.name}. Faça as alterações e clique em Salvar.`);
+  currentEditIndex = idx;
 }
 
 // Event listeners
@@ -119,7 +120,16 @@ document.addEventListener('click', (e) => {
     if (ingredients.length === 0) return alert('Adicione pelo menos um ingrediente');
 
     const recipe = { name, serves, priority, days, ingredients };
+
+   if (currentEditIndex >= 0) {
+    // Se está editando, substitui a receita existente
+    window.recipes.splice(currentEditIndex, 0, recipe);
+    currentEditIndex = -1; // Reseta o índice de edição
+   } else {
+    // Se é uma nova receita, adiciona normalmente
     window.recipes.push(recipe);
+   }
+    
     window.saveAll();
     
     // Limpa o formulário
@@ -130,7 +140,7 @@ document.addEventListener('click', (e) => {
     qs('#m_recIngredients').value = '';
     
     renderRecipeList();
-    UI.setAlert(`Receita salva: ${name}`);
+    setAlert(`Receita ${currentEditIndex >= 0 ? 'atualizada' : 'salva'}: ${name}`);
   }
 
   // Limpar formulário
