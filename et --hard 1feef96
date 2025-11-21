@@ -1,0 +1,10 @@
+[33meced4fe[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m limpando arquivoc desnecessarios
+[33m5b1ab47[m[33m ([m[1;31morigin/versao-estavel[m[33m, [m[1;32mversao-estavel[m[33m)[m Resolvendo conflitos: mantendo melhorias de agrupamento
+[33m2d2d2d7[m Agora os itens são agrupados automaticamente Os nomes são padronizados em minúsculas As unidades são normalizadas Melhor tratamento de erros e mensagens para o usuário Suporte a números com vírgula ou ponto como separador decimal
+[33m212ffa8[m nao ta pronto ainda, mas farei uma mudanca grand e quero salvar como esta agora
+[33m2d6e64e[m coloquei a camera, e funcao de ler o codgo, mas ainda nao ta reconhecendo
+[33m1feef96[m totalmente organizado, com as funcoes e modulos do js separadas e funcionando
+[33m312642a[m mais organizacao, foco na programcao javascrips, mudanças no documento app.js
+[33m6adfc1a[m organizando a programacao, desmembrei o javascrips e o CSS
+[33mc188cc5[m lista de tarefas
+[33m4abdcc6[m melhorias no visual e na frequencia 2
