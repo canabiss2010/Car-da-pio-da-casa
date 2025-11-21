@@ -2,21 +2,6 @@
 import { STORAGE_KEYS, APP_CONFIG } from './config.js';
 import { UI } from './modules/ui.js';
 import { qs, validateJSON } from './modules/utils.js';
-
-// Constantes
-const APP_EVENTS = {
-  DATA_LOADED: 'app:dataLoaded',
-  DATA_SAVED: 'app:dataSaved',
-  ERROR: 'app:error'
-};
-
-// Estado da aplicação
-const appState = {
-  isInitialized: false,
-  isLoading: false,
-  lastSaved: null
-};
-
 // Inicialização
 document.addEventListener('DOMContentLoaded', async () => {
   try {
@@ -168,29 +153,13 @@ async function loadModule(modulePath, callback) {
  * Configura os listeners de eventos
  */
 function setupEventListeners() {
-  // Configuração dos botões principais
-  const buttonConfigs = [
-    { 
-      selector: '#b-inv', 
-      module: './modules/inventory.js',
-      action: 'showInventory'
-    },
-    { 
-      selector: '#b-rec', 
-      module: './modules/recipes.js',
-      action: 'showRecipes'
-    },
-    { 
-      selector: '#b-create', 
-      module: './modules/planning.js',
-      action: 'showCreatePlan'
-    },
-    { 
-      selector: '#b-current', 
-      module: './modules/planning.js',
-      action: 'showCurrentPlan'
-    }
-  ];
+  // Blocos principais
+  const buttons = {
+  '#b-inv': './modules/inventory.js',
+  '#b-rec': './modules/recipes.js',
+  '#b-create': './modules/planning.js',
+  '#b-current': './modules/planning.js'
+};
 
   buttonConfigs.forEach(({ selector, module, action }) => {
     const button = qs(selector);

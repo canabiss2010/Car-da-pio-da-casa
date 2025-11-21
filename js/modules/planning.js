@@ -1,6 +1,6 @@
 // js/modules/planning.js
 import { qs } from './utils.js';
-import { UI } from './ui.js';
+import { openModal, closeModal, setAlert } from './ui.js';
 
 export function showCreatePlan() {
   const html = `
@@ -62,7 +62,7 @@ export function showCreatePlan() {
     <div id="m_planPreview" style="margin-top:16px"></div>
   `;
 
-  UI.openModal('Criar Plano', html);
+  openModal('Criar Plano', html);
   
   // Adiciona os event listeners após o modal ser renderizado
   setTimeout(() => {
@@ -81,7 +81,7 @@ function generatePlan() {
   
   // Validação básica
   if (!window.recipes || window.recipes.length === 0) {
-    return UI.setAlert('Adicione receitas primeiro!', 'error');
+    return setAlert('Adicione receitas primeiro!', 'error');
   }
   
   // Valida se há receitas suficientes
@@ -128,7 +128,7 @@ function generatePlan() {
   window.plan = plan;
   window.saveAll();
   showPlanPreview(plan, qs('#m_people').value || 4, true);
-  UI.setAlert('Plano gerado com sucesso!');
+  setAlert('Plano gerado com sucesso!');
 }
 
 function simulatePlan() {
@@ -137,7 +137,7 @@ function simulatePlan() {
   const mealsPerDay = parseInt(qs('#m_meals').value) || 2;
   
   if (!window.recipes || window.recipes.length === 0) {
-    return UI.setAlert('Adicione receitas primeiro!', 'error');
+    return setAlert('Adicione receitas primeiro!', 'error');
   }
 
   const plan = [];
@@ -173,7 +173,7 @@ function simulatePlan() {
   }
 
   showPlanPreview(plan, qs('#m_people').value || 4, false);
-  UI.setAlert('Simulação concluída. Para aplicar o plano, clique em "Gerar Plano".');
+  setAlert('Simulação concluída. Para aplicar o plano, clique em "Gerar Plano".');
 }
 
 function showPlanPreview(plan, people, isRealPlan) {
@@ -214,15 +214,15 @@ function showPlanPreview(plan, people, isRealPlan) {
 
     saveButton.querySelector('#m_savePlan').addEventListener('click', () => {
       window.saveAll();
-      UI.closeModal();
-      UI.setAlert('Plano salvo com sucesso!');
+      closeModal();
+      setAlert('Plano salvo com sucesso!');
     });
   }
 }
 
 export function showCurrentPlan() {
   if (!window.plan || window.plan.length === 0) {
-    return UI.openModal('Plano Atual', '<p>Nenhum plano gerado ainda.</p>');
+    return openModal('Plano Atual', '<p>Nenhum plano gerado ainda.</p>');
   }
 
   const people = 4;
@@ -234,7 +234,7 @@ export function showCurrentPlan() {
     </div>
   `;
 
-  UI.openModal('Plano Atual', html);
+  openModal('Plano Atual', html);
   showPlanPreview(window.plan, people, true);
 
   // Adiciona os event listeners após o modal ser renderizado
@@ -244,22 +244,16 @@ export function showCurrentPlan() {
     
     if (exportBtn) {
       exportBtn.addEventListener('click', () => {
-        try {
-          const dataStr = JSON.stringify(window.plan, null, 2);
-          const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-          const exportName = `plano-${new Date().toISOString().split('T')[0]}.json`;
-          
-          const linkElement = document.createElement('a');
-          linkElement.setAttribute('href', dataUri);
-          linkElement.setAttribute('download', exportName);
-          linkElement.setAttribute('aria-label', 'Exportar plano de refeições');
-          linkElement.click();
-          
-          UI.setAlert('Plano exportado com sucesso!');
-        } catch (error) {
-          console.error('Erro ao exportar plano:', error);
-          UI.setAlert('Erro ao exportar o plano. Tente novamente.', 'error');
-        }
+        const dataStr = JSON.stringify(window.plan, null, 2);
+        const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+        const exportName = `plano-${new Date().toISOString().split('T')[0]}.json`;
+        
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportName);
+        linkElement.click();
+        
+        setAlert('Plano exportado com sucesso!');
       });
     }
 
@@ -268,8 +262,8 @@ export function showCurrentPlan() {
         if (confirm('Tem certeza que deseja limpar o plano atual?')) {
           window.plan = [];
           window.saveAll();
-          UI.closeModal();
-          UI.setAlert('Plano limpo com sucesso!');
+          closeModal();
+          setAlert('Plano limpo com sucesso!');
         }
       });
     }

@@ -1,6 +1,19 @@
 // js/modules/inventory.js
 import { qs, parseLine } from './utils.js';
-import { UI } from './ui.js';
+import { openModal, setAlert } from './ui.js';
+
+function groupItems(items) {
+  const grouped = {};
+  items.forEach(item => {
+    const key = `${item.name.toLowerCase()}_${item.unit}`;
+    if (!grouped[key]) {
+      grouped[key] = { ...item };
+    } else {
+      grouped[key].qty += item.qty;
+    }
+  });
+  return Object.values(grouped);
+}
 
 // Cache de seletores DOM
 const selectors = {
@@ -111,17 +124,13 @@ export function showInventory() {
     <div id="m_invList" class="list" style="margin-top:12px" aria-live="polite"></div>
   `;
   
-  UI.openModal('Dispensa', html);
-  setupEventListeners();
+  openModal('Dispensa', html);
   renderList();
 }
 
-// Configura os event listeners
-function setupEventListeners() {
-  // Adicionar item ao pressionar Enter
-  qs(selectors.invLine)?.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') addSingleItem();
-  });
+function renderList() {
+  const el = qs('#m_invList'); 
+  el.innerHTML = '';
   
   // Botões
   qs(selectors.addBtn)?.addEventListener('click', addSingleItem);
@@ -134,35 +143,106 @@ function renderList() {
   const el = qs(selectors.invList);
   if (!el) return;
   
-  el.innerHTML = window.inventory.length === 0 
-    ? '<div class="small">Sem itens</div>'
-    : window.inventory.map((item, idx) => `
-        <div class="item">
-          <div style="max-width:70%">
-            <strong style="text-transform:capitalize">${item.name}</strong>
-            <div class="small">${item.qty} ${item.unit}</div>
-          </div>
-          <div>
-            <button 
-              data-idx="${idx}" 
-              class="btn-ghost"
-              aria-label="Remover ${item.name}"
-            >
-              Remover
-            </button>
-          </div>
-        </div>
-      `).join('');
+  const groupedItems = groupItems(window.inventory);
+  
+  groupedItems.forEach((item, idx) => {
+    const node = document.createElement('div'); 
+    node.className = 'item';
+    node.innerHTML = `
+      <div style="max-width:70%">
+        <strong style="text-transform:capitalize">${item.name}</strong>
+        <div class="small">${item.qty.toFixed(2)} ${item.unit} (${window.inventory.filter(i => 
+          i.name.toLowerCase() === item.name.toLowerCase() && i.unit === item.unit
+        ).length} itens)</div>
+      </div>
+      <div>
+        <button data-name="${item.name}" data-unit="${item.unit}" class="btn-ghost">Remover</button>
+      </div>
+    `;
+    el.appendChild(node);
+  });
 
-  // Adiciona eventos de remoção
-  el.querySelectorAll('button[data-idx]').forEach(btn => {
+  el.querySelectorAll('button[data-name]').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      const idx = Number(e.currentTarget.dataset.idx);
-      const name = window.inventory[idx]?.name || 'item';
-      window.inventory.splice(idx, 1);
+      const name = btn.dataset.name;
+      const unit = btn.dataset.unit;
+      window.inventory = window.inventory.filter(i => 
+        !(i.name.toLowerCase() === name.toLowerCase() && i.unit === unit)
+      );
       window.saveAll();
       renderList();
-      UI.setAlert(`Item removido: ${name}`);
+      setAlert(`Todos os ${name} foram removidos`);
     });
   });
 }
+
+// Adicionar item único
+document.addEventListener('click', (e) => {
+  if (e.target.id === 'm_addInv') {
+    const input = qs('#m_invLine').value.trim();
+    if (!input) {
+      setAlert('Digite: nome,quantidade,unidade', 'error');
+      return;
+    }
+
+    const item = parseLine(input);
+    if (!item) {
+      setAlert('Formato inválido. Use: nome,quantidade,unidade', 'error');
+      return;
+    }
+
+    // Padroniza o nome
+    item.name = item.name.toLowerCase().trim();
+    
+    window.inventory.push(item);
+    window.saveAll();
+    qs('#m_invLine').value = '';
+    renderList();
+    setAlert(`Item adicionado: ${item.name}`);
+  }
+
+  // Adicionar múltiplos itens
+  if (e.target.id === 'm_paste') {
+    const textarea = qs('#m_invBulk');
+    const text = textarea.value.trim();
+    
+    if (!text) {
+      setAlert('Cole as linhas com os itens', 'error');
+      return;
+    }
+    
+    const lines = text
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean);
+    
+    let added = 0;
+    lines.forEach(line => {
+      const item = parseLine(line);
+      if (item) {
+        // Padroniza o nome
+        item.name = item.name.toLowerCase().trim();
+        window.inventory.push(item);
+        added++;
+      }
+    });
+    
+    if (added > 0) {
+      window.saveAll();
+      textarea.value = '';
+      renderList();
+      setAlert(`Adicionados ${added} itens`);
+    } else {
+      setAlert('Nenhum item válido encontrado', 'error');
+    }
+  }
+
+  // Limpar inventário
+  if (e.target.id === 'm_clearInv') {
+    if (!confirm('Tem certeza que deseja limpar todo o inventário?')) return;
+    window.inventory = [];
+    window.saveAll();
+    renderList();
+    setAlert('Inventário limpo');
+  }
+});

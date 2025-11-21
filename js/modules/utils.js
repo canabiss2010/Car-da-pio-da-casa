@@ -115,67 +115,19 @@ export function toGrams(qty, unit, name) {
   }
 }
 
-/**
-/**
- * Converte uma quantidade de gramas para outra unidade
- * @param {number} grams - Quantidade em gramas
- * @param {string} targetUnit - Unidade de destino
- * @param {string} [name] - Nome do item para cálculo de densidade
- * @returns {number|null} Quantidade convertida ou null em caso de erro
- */
-export function fromGrams(grams, targetUnit, name) {
-  if (grams == null || isNaN(grams)) {
-    console.warn('Quantidade em gramas inválida:', grams);
-    return null;
-  }
-
-  const u = normalizeUnit(targetUnit);
-  const c = DEFAULTS.conv;
-
-  try {
-    if (u === 'g') return grams;
-    if (u === 'kg') return grams / c.kg_to_g;
-    if (u === 'mg') return grams * c.g_to_mg;
-    // ... resto da função fromGrams
-  } catch (error) {
-    console.error('Erro na conversão de gramas:', error);
-    return null;
-  }
-}
-
-/**
- * Processa uma linha de texto em um objeto de ingrediente
- * @param {string} line - Linha de texto no formato "nome,quantidade,unidade"
- * @returns {Object|null} Objeto com nome, quantidade e unidade ou null em caso de erro
- */
 export function parseLine(line) {
-  try {
-    const parts = line.split(',').map(s => s.trim()).filter(Boolean);
-    if (parts.length === 0) return null;
-    
-    if (parts.length === 1) {
-      return { 
-        name: parts[0].toLowerCase(), 
-        qty: 1, 
-        unit: 'un' 
-      };
-    }
-    
-    const qty = parseFloat(parts[1]);
-    if (isNaN(qty)) {
-      console.warn('Quantidade inválida na linha:', line);
-      return null;
-    }
-    
-    return { 
-      name: parts[0].toLowerCase(), 
-      qty, 
-      unit: normalizeUnit(parts[2] || 'un') 
-    };
-  } catch (error) {
-    console.error('Erro ao processar linha:', error);
-    return null;
-  }
+  const parts = line.split(',').map(s => s.trim()).filter(Boolean);
+  if (parts.length === 0) return null;
+  if (parts.length === 1) return { name: parts[0].toLowerCase().trim(), qty: 1, unit: 'un' };
+  
+  const qty = parseFloat(parts[1].replace(',', '.')) || 0;
+  const unit = normalizeUnit(parts[2] || 'un');
+  
+  return { 
+    name: parts[0].toLowerCase().trim(), 
+    qty, 
+    unit 
+  };
 }
 
 /*
@@ -199,67 +151,9 @@ export function validateJSON(data, defaultReturn = []) {
   }
 }
 
-// Testes unitários básicos (comentados por padrão)
-// Para executar os testes, descomente o bloco abaixo
-(function runTests() {
-  // Teste para parseLine
-  (function testParseLine() {
-    const testCases = [
-      { input: 'arroz,2,kg', expected: { name: 'arroz', qty: 2, unit: 'kg' } },
-      { input: 'feijão', expected: { name: 'feijão', qty: 1, unit: 'un' } },
-      { input: 'leite,1,l', expected: { name: 'leite', qty: 1, unit: 'l' } }
-    ];
-
-    testCases.forEach(({ input, expected }, i) => {
-      const result = parseLine(input);
-      const passed = JSON.stringify(result) === JSON.stringify(expected);
-      console.log(`Teste ${i + 1}: ${passed ? '✅' : '❌'}`, {
-        input,
-        expected,
-        result,
-        passed
-      });
-    });
-  })();
-
-  // Teste para normalizeUnit
-  (function testNormalizeUnit() {
-    const testCases = [
-      { input: 'KG', expected: 'kg' },
-      { input: 'grama', expected: 'g' },
-      { input: 'xicara', expected: 'xic' },
-      { input: 'colher de sopa', expected: 'cs' },
-      { input: 'invalid', expected: 'invalid' }
-    ];
-
-    testCases.forEach(({ input, expected }) => {
-      const result = normalizeUnit(input);
-      const passed = result === expected;
-      console.log(`Teste "${input}": ${passed ? '✅' : '❌'}`, {
-        expected,
-        result,
-        passed
-      });
-    });
-  })(); // fim do teste para normalizeUnit  
-
-  // Teste para validateJSON
-  (function testValidateJSON() {
-    const testCases = [
-      { input: '[]', expected: [] },
-      { input: '[1,2,3]', expected: [1,2,3] },
-      { input: '{"name":"arroz","qty":2,"unit":"kg"}', expected: { name: 'arroz', qty: 2, unit: 'kg' } },
-      { input: 'invalid', expected: [] }
-    ];
-
-    testCases.forEach(({ input, expected }) => {
-      const result = validateJSON(input);
-      const passed = JSON.stringify(result) === JSON.stringify(expected);
-      console.log(`Teste "${input}": ${passed ? '✅' : '❌'}`, {
-        expected,
-        result,
-        passed
-      });
-    });
-  })(); // fim do teste para validateJSON
-})(); // fim do runTests
+// Obtém o nome formatado do ingrediente
+export function getIngredientName(ingredient) {
+  if (!ingredient) return '';
+  if (typeof ingredient === 'string') return ingredient;
+  return ingredient.name || '';
+}

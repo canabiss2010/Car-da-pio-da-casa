@@ -1,18 +1,7 @@
 // js/modules/recipes.js
-import { qs } from './utils.js';
-import { UI } from './ui.js';
-
-// Constantes para mensagens
-const MESSAGES = {
-  RECIPE_SAVED: 'Receita salva com sucesso!',
-  RECIPE_DELETED: 'Receita excluída com sucesso!',
-  INVALID_NAME: 'O nome da receita deve ter pelo menos 3 caracteres',
-  INVALID_INGREDIENTS: 'Adicione pelo menos um ingrediente válido',
-  INVALID_INGREDIENT_FORMAT: 'Formato inválido. Use: nome,quantidade,unidade',
-  CONFIRM_DELETE: 'Tem certeza que deseja excluir esta receita?',
-  CONFIRM_CLEAR: 'Limpar o formulário de receita?'
-};
-
+import { qs, getIngredientName } from './utils.js';
+import { openModal, closeModal, setAlert } from './ui.js';
+let currentEditIndex = -1;
 export function showRecipes() {
   const html = `
     <div style="margin-bottom: 16px">
@@ -90,7 +79,7 @@ export function showRecipes() {
     <div id="m_recList" class="list" aria-live="polite"></div>
   `;
 
-  UI.openModal('Gerenciar Receitas', html);
+  openModal('Receitas', html);
   renderRecipeList();
   setupEventListeners();
 }
@@ -231,9 +220,24 @@ function renderRecipeList() {
     </div>
   `).join('');
 
-  // Adiciona os eventos de clique
-  el.querySelectorAll('[data-action]').forEach(btn => {
-    btn.addEventListener('click', handleRecipeAction);
+  // Eventos dos botões
+  el.querySelectorAll('button[data-idx]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = Number(btn.dataset.idx);
+      const action = btn.dataset.action;
+      
+      if (action === 'delete') {
+        if (confirm(`Tem certeza que deseja excluir a receita "${window.recipes[idx].name}"?`)) {
+          const name = window.recipes[idx].name;
+          window.recipes.splice(idx, 1);
+          window.saveAll();
+          renderRecipeList();
+          setAlert(`Receita excluída: ${name}`);
+        }
+      } else if (action === 'edit') {
+        loadRecipeForEdit(idx);
+      }
+    });
   });
 }
 
@@ -280,5 +284,69 @@ function loadRecipeForEdit(idx) {
   window.recipes.splice(idx, 1);
   window.saveAll();
   renderRecipeList();
-  UI.setAlert(`Editando: ${recipe.name}. Faça as alterações e clique em Salvar.`, 'info');
+  setAlert(`Editando: ${recipe.name}. Faça as alterações e clique em Salvar.`);
+  currentEditIndex = idx;
 }
+
+// Event listeners
+document.addEventListener('click', (e) => {
+  // Salvar receita
+  if (e.target.id === 'm_addRec') {
+    const name = qs('#m_recName').value.trim();
+    const serves = parseInt(qs('#m_recServes').value) || 1;
+    const priority = Math.min(10, Math.max(1, parseInt(qs('#m_recPriority').value) || 5));
+    const days = Math.max(1, parseInt(qs('#m_recDays').value) || 2);
+    
+    const ingredientsText = qs('#m_recIngredients').value.trim();
+    const ingredients = ingredientsText
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map(line => {
+        const [name, qty, unit] = line.split(',').map(s => s.trim());
+        return { 
+          name: name.toLowerCase(), 
+          qty: parseFloat(qty.replace(',', '.')) || 0, 
+          unit: unit || 'un' 
+        };
+      })
+      .filter(ing => ing.name && !isNaN(ing.qty) && ing.qty > 0);
+
+    if (!name) return alert('Digite um nome para a receita');
+    if (ingredients.length === 0) return alert('Adicione pelo menos um ingrediente');
+
+    const recipe = { name, serves, priority, days, ingredients };
+
+   if (currentEditIndex >= 0) {
+    // Se está editando, substitui a receita existente
+    window.recipes.splice(currentEditIndex, 0, recipe);
+    currentEditIndex = -1; // Reseta o índice de edição
+   } else {
+    // Se é uma nova receita, adiciona normalmente
+    window.recipes.push(recipe);
+   }
+    
+    window.saveAll();
+    
+    // Limpa o formulário
+    qs('#m_recName').value = '';
+    qs('#m_recServes').value = '4';
+    qs('#m_recPriority').value = '5';
+    qs('#m_recDays').value = '2';
+    qs('#m_recIngredients').value = '';
+    
+    renderRecipeList();
+    setAlert(`Receita ${currentEditIndex >= 0 ? 'atualizada' : 'salva'}: ${name}`);
+  }
+
+  // Limpar formulário
+  if (e.target.id === 'm_clearRec') {
+    if (confirm('Limpar o formulário de receita?')) {
+      qs('#m_recName').value = '';
+      qs('#m_recServes').value = '4';
+      qs('#m_recPriority').value = '5';
+      qs('#m_recDays').value = '2';
+      qs('#m_recIngredients').value = '';
+    }
+  }
+});
