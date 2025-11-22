@@ -165,19 +165,82 @@ function showPlanPreview(plan, people, isRealPlan) {
   });
 
   if (isRealPlan) {
+    // 1. Primeiro, o código do botão Salvar Plano
     const saveButton = document.createElement('div');
     saveButton.style.marginTop = '16px';
     saveButton.innerHTML = '<button id="m_savePlan" class="btn">Salvar Plano</button>';
     container.appendChild(saveButton);
 
+  // 2. Depois o evento do botão Salvar
     saveButton.querySelector('#m_savePlan').addEventListener('click', () => {
-      window.saveAll();  // Salva o plano que já está em window.plan
+      window.saveAll();
       closeModal();
       setAlert('Plano salvo com sucesso!');
     });
+
+    // 3. E por fim, o evento do botão Trocar (fora do evento do Salvar)
+    container.addEventListener('click', (e) => {
+      const trocarBtn = e.target.closest('.btn-ghost[data-day][data-meal]');
+      if (!trocarBtn) return;
+      
+      const dayIndex = parseInt(trocarBtn.dataset.day);
+      const mealIndex = parseInt(trocarBtn.dataset.meal);
+  
+      // Cria um seletor com todas as receitas
+      let optionsHtml = window.recipes.map(recipe => 
+        `<option value="${recipe.name}">${recipe.name}</option>`
+      ).join('');
+  
+      const selectHtml = `
+        <div style="margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 4px;">
+          <select id="recipeSelect" class="form-control" style="margin-bottom: 10px;">
+            ${optionsHtml}
+          </select>
+          <button id="confirmChange" class="btn">Confirmar Troca</button>
+          <button id="cancelChange" class="btn-ghost" style="margin-left: 5px;">Cancelar</button>
+        </div>
+      `;
+  
+      // Mostra o seletor de receitas
+      const selectContainer = document.createElement('div');
+      selectContainer.style.marginTop = '10px';
+      selectContainer.innerHTML = selectHtml;
+  
+      // Remove qualquer seletor anterior
+      const oldSelect = container.querySelector('#recipeSelectContainer');
+      if (oldSelect) oldSelect.remove();
+  
+      // Adiciona o novo seletor após o botão clicado
+      trocarBtn.parentNode.insertAdjacentElement('afterend', selectContainer);
+      selectContainer.id = 'recipeSelectContainer';
+  
+      // Adiciona evento ao botão de confirmar
+      selectContainer.querySelector('#confirmChange').addEventListener('click', () => {
+        const select = selectContainer.querySelector('#recipeSelect');
+        const selectedRecipeName = select.value;
+        const selectedRecipe = window.recipes.find(r => r.name === selectedRecipeName);
+        
+        if (selectedRecipe) {
+          // Atualiza o plano
+          plan[dayIndex][mealIndex] = {
+            name: selectedRecipe.name,
+            recipe: selectedRecipe,
+            suggested: false
+          };
+          
+          // Atualiza a visualização
+          showPlanPreview(plan, people, isRealPlan);
+          setAlert('Receita trocada com sucesso!');
+        }
+      });
+  
+      // Adiciona evento ao botão de cancelar
+      selectContainer.querySelector('#cancelChange').addEventListener('click', () => {
+        selectContainer.remove();
+      });
+    });
   }
 }
-
 export function showCurrentPlan() {
   if (!window.plan || window.plan.length === 0) {
     return openModal('Plano Atual', '<p>Nenhum plano gerado ainda.</p>');
