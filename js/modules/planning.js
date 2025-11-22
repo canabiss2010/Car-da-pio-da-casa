@@ -153,7 +153,7 @@ function showPlanPreview(plan, people, isRealPlan) {
       mealElement.style.padding = '4px 0';
       mealElement.innerHTML = `
         <div style="display:flex;justify-content:space-between">
-          <span>${meal.name} (${(meal.recipe.serves * people).toFixed(0)} porções)</span>
+          <span>${meal.name.charAt(0).toUpperCase() + meal.name.slice(1).toLowerCase()}</span>
           ${isRealPlan ? `<button class="btn-ghost" data-day="${dayIndex}" data-meal="${mealIndex}">Trocar</button>` : ''}
         </div>
       `;
@@ -198,7 +198,7 @@ export function showCurrentPlan() {
   const container = qs('#m_currentPlan');
   if (container) {
     container.innerHTML = ''; // Limpa o container primeiro
-    
+
     // Mostra os dias do plano
     window.plan.forEach((dayMeals, dayIndex) => {
       const dayElement = document.createElement('div');
@@ -212,7 +212,7 @@ export function showCurrentPlan() {
         const mealElement = document.createElement('div');
         mealElement.style.padding = '4px 0';
         const recipeName = meal.name.charAt(0).toUpperCase() + meal.name.slice(1).toLowerCase();
-        mealElement.textContent = `${recipeName} (${(meal.recipe.serves * people).toFixed(0)} porções)`;
+        mealElement.textContent = recipeName;
         mealsList.appendChild(mealElement);
       });
       
