@@ -47,45 +47,87 @@ function generatePlan() {
   const people = parseInt(qs('#m_people').value) || 4;
   const days = parseInt(qs('#m_days').value) || 7;
   const mealsPerDay = parseInt(qs('#m_meals').value) || 2;
-  
+
   if (!window.recipes || window.recipes.length === 0) {
     return setAlert('Adicione receitas primeiro!', 'error');
   }
 
   const plan = [];
-  let remainingRecipes = [...window.recipes];
-  let lastUsedRecipes = new Set();
+  let activeRecipes = []; // { recipe, daysLeft, isCookingDay }
 
   for (let day = 0; day < days; day++) {
     const dailyMeals = [];
     
-    for (let meal = 0; meal < mealsPerDay; meal++) {
-      const availableRecipes = remainingRecipes.filter(
-        r => !lastUsedRecipes.has(r.name)
+    // 1. Atualiza as receitas ativas
+    activeRecipes.forEach(recipe => {
+      recipe.daysLeft--;
+      recipe.isCookingDay = false; // Reseta a flag de cozinhar
+    });
+
+    // Remove receitas que já expiraram
+    const activeRecipesBefore = [...activeRecipes]; // Cópia para comparação
+    activeRecipes = activeRecipes.filter(r => r.daysLeft > 0);
+
+    // 2. Adiciona as receitas ativas ao cardápio do dia
+    activeRecipes.forEach(active => {
+      dailyMeals.push({
+        name: active.recipe.name,
+        recipe: active.recipe,
+        suggested: false,
+        isCookingDay: false // Não é dia de cozinhar, só consumir
+      });
+    });
+
+    // 3. Adiciona novas receitas se necessário
+    while (dailyMeals.length < mealsPerDay && window.recipes.length > 0) {
+      // Filtra receitas que não estão ativas
+      const availableRecipes = window.recipes.filter(recipe => 
+        !activeRecipes.some(ar => ar.recipe.name === recipe.name)
       );
+
+      if (availableRecipes.length === 0) break;
+
+      // Seleciona uma receita aleatória, considerando a frequência
+      const totalFrequency = availableRecipes.reduce((sum, r) => sum + (r.frequency || 1), 0);
+      let random = Math.random() * totalFrequency;
+      let selectedRecipe;
       
-      const recipePool = availableRecipes.length > 0 ? availableRecipes : [...remainingRecipes];
-      const randomIndex = Math.floor(Math.random() * recipePool.length);
-      const selectedRecipe = recipePool[randomIndex];
-      
+      for (const recipe of availableRecipes) {
+        random -= (recipe.frequency || 1);
+        if (random <= 0) {
+          selectedRecipe = recipe;
+          break;
+        }
+      }
+
+      // Calcula quantas porções são necessárias
+      const portionsNeeded = Math.ceil(people / (selectedRecipe.serves || 4));
+      const daysLast = Math.min(selectedRecipe.days || 1, Math.ceil(portionsNeeded / 2));
+
+      // Adiciona ao cardápio do dia
       dailyMeals.push({
         name: selectedRecipe.name,
         recipe: selectedRecipe,
-        suggested: false
+        suggested: false,
+        isCookingDay: true, // É dia de cozinhar esta receita
+        portions: portionsNeeded
       });
 
-      lastUsedRecipes.add(selectedRecipe.name);
-      if (lastUsedRecipes.size > 3) {
-        const first = Array.from(lastUsedRecipes)[0];
-        lastUsedRecipes.delete(first);
+      // Se a receita durar mais de 1 dia, adiciona às ativas
+      if (daysLast > 1) {
+        activeRecipes.push({
+          recipe: selectedRecipe,
+          daysLeft: daysLast - 1, // Já contamos o dia atual
+          isCookingDay: false
+        });
       }
     }
-    
+
     plan.push(dailyMeals);
   }
 
-  window.plan = plan;  // Atualiza o plano global
-  showPlanPreview(plan, qs('#m_people').value || 4, true);
+  window.plan = plan;
+  showPlanPreview(plan, people, true);
   setAlert('Prévia do plano gerada. Revise e clique em "Salvar Plano" para confirmar.');
 }
 
@@ -150,14 +192,18 @@ function showPlanPreview(plan, people, isRealPlan) {
     
     dayMeals.forEach((meal, mealIndex) => {
       const mealElement = document.createElement('div');
+      mealElement.className = 'meal-item' + (meal.isCookingDay ? ' cooking-day' : '');
       mealElement.style.padding = '4px 0';
       mealElement.innerHTML = `
-        <div style="display:flex;justify-content:space-between">
-          <span>${meal.name.charAt(0).toUpperCase() + meal.name.slice(1).toLowerCase()}</span>
-          ${isRealPlan ? `<button class="btn-ghost" data-day="${dayIndex}" data-meal="${mealIndex}">Trocar</button>` : ''}
-        </div>
-      `;
-      mealsList.appendChild(mealElement);
+       <div style="display:flex;justify-content:space-between;align-items:center">
+         <span>
+           ${meal.name.charAt(0).toUpperCase() + meal.name.slice(1).toLowerCase()}
+           ${meal.isCookingDay ? '<span class="cooking-badge">cozinhar</span>' : ''}
+         </span>
+         ${isRealPlan ? `<button class="btn-ghost" data-day="${dayIndex}" data-meal="${mealIndex}">Trocar</button>` : ''}
+       </div>
+     `;
+     mealsList.appendChild(mealElement);
     });
     
     dayElement.appendChild(mealsList);
