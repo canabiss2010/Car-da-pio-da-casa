@@ -84,10 +84,9 @@ function generatePlan() {
     plan.push(dailyMeals);
   }
 
-  window.plan = plan;
-  window.saveAll();
+  window.plan = plan;  // Atualiza o plano global
   showPlanPreview(plan, qs('#m_people').value || 4, true);
-  setAlert('Plano gerado com sucesso!');
+  setAlert('Prévia do plano gerada. Revise e clique em "Salvar Plano" para confirmar.');
 }
 
 function simulatePlan() {
@@ -172,7 +171,7 @@ function showPlanPreview(plan, people, isRealPlan) {
     container.appendChild(saveButton);
 
     saveButton.querySelector('#m_savePlan').addEventListener('click', () => {
-      window.saveAll();
+      window.saveAll();  // Salva o plano que já está em window.plan
       closeModal();
       setAlert('Plano salvo com sucesso!');
     });
@@ -194,7 +193,33 @@ export function showCurrentPlan() {
   `;
 
   openModal('Plano Atual', html);
-  showPlanPreview(window.plan, people, true);
+  
+  // Mostra o preview no container correto
+  const container = qs('#m_currentPlan');
+  if (container) {
+    container.innerHTML = ''; // Limpa o container primeiro
+    
+    // Mostra os dias do plano
+    window.plan.forEach((dayMeals, dayIndex) => {
+      const dayElement = document.createElement('div');
+      dayElement.style.marginBottom = '16px';
+      dayElement.innerHTML = `<strong>Dia ${dayIndex + 1}</strong>`;
+      
+      const mealsList = document.createElement('div');
+      mealsList.style.marginLeft = '16px';
+      
+      dayMeals.forEach((meal) => {
+        const mealElement = document.createElement('div');
+        mealElement.style.padding = '4px 0';
+        const recipeName = meal.name.charAt(0).toUpperCase() + meal.name.slice(1).toLowerCase();
+        mealElement.textContent = `${recipeName} (${(meal.recipe.serves * people).toFixed(0)} porções)`;
+        mealsList.appendChild(mealElement);
+      });
+      
+      dayElement.appendChild(mealsList);
+      container.appendChild(dayElement);
+    });
+  }
 
   // Adiciona os event listeners após o modal ser renderizado
   setTimeout(() => {
