@@ -2,6 +2,20 @@
 import { qs } from './utils.js';
 import { openModal, closeModal, setAlert } from './ui.js';
 
+// Escala de frequência
+const frequencyLevels = [
+  { level: 1, percentage: 10 },  // Muito Raro
+  { level: 2, percentage: 25 },  // Raro
+  { level: 3, percentage: 50 },  // Moderado
+  { level: 4, percentage: 75 },  // Frequente
+  { level: 5, percentage: 90 }   // Muito Frequente
+];
+
+function getFrequencyPercentage(level) {
+  const freq = frequencyLevels.find(f => f.level === level);
+  return freq ? freq.percentage : 10; // Default para 10% se não encontrar
+}
+
 export function showCreatePlan() {
   const html = `
     <div class="small" style="margin-bottom:16px">
@@ -43,6 +57,11 @@ export function showCreatePlan() {
   }, 100);
 }
 
+function getFrequencyPercentage(level) {
+  const freq = frequencyLevels.find(f => f.level === level);
+  return freq ? freq.percentage : 10; // Default para 10% se não encontrar
+}
+
 function generatePlan() {
   const people = parseInt(qs('#m_people').value) || 4;
   const days = parseInt(qs('#m_days').value) || 7;
@@ -52,73 +71,72 @@ function generatePlan() {
     return setAlert('Adicione receitas primeiro!', 'error');
   }
 
+  // 1. Calcula quantas vezes cada receita deve aparecer
+  const totalMeals = days * mealsPerDay;
+  const recipesWithCount = window.recipes.map(recipe => {
+    const percentage = getFrequencyPercentage(recipe.frequency);
+    const exactCount = (percentage / 100) * totalMeals;
+    return {
+      ...recipe,
+      targetCount: Math.max(1, Math.round(exactCount)), // Mínimo de 1 vez
+      currentCount: 0
+    };
+  });
+
   const plan = [];
-  let activeRecipes = []; // { recipe, daysLeft, isCookingDay }
+  const activeRecipes = []; // { recipe, daysLeft }
 
   for (let day = 0; day < days; day++) {
     const dailyMeals = [];
     
-    // 1. Atualiza as receitas ativas
-    activeRecipes.forEach(recipe => {
-      recipe.daysLeft--;
-      recipe.isCookingDay = false; // Reseta a flag de cozinhar
-    });
-
-    // Remove receitas que já expiraram
-    const activeRecipesBefore = [...activeRecipes]; // Cópia para comparação
+    // 2. Atualiza receitas ativas
+    activeRecipes.forEach(recipe => recipe.daysLeft--);
     activeRecipes = activeRecipes.filter(r => r.daysLeft > 0);
 
-    // 2. Adiciona as receitas ativas ao cardápio do dia
+    // 3. Adiciona receitas ativas ao dia
     activeRecipes.forEach(active => {
       dailyMeals.push({
         name: active.recipe.name,
         recipe: active.recipe,
-        suggested: false,
-        isCookingDay: false // Não é dia de cozinhar, só consumir
+        isCookingDay: false
       });
     });
 
-    // 3. Adiciona novas receitas se necessário
-    while (dailyMeals.length < mealsPerDay && window.recipes.length > 0) {
-      // Filtra receitas que não estão ativas
-      const availableRecipes = window.recipes.filter(recipe => 
-        !activeRecipes.some(ar => ar.recipe.name === recipe.name)
+    // 4. Adiciona novas receitas se necessário
+    while (dailyMeals.length < mealsPerDay) {
+      // Ordena por prioridade (menos usadas primeiro, considerando a frequência)
+      recipesWithCount.sort((a, b) => 
+        (a.currentCount / a.targetCount) - (b.currentCount / b.targetCount)
       );
 
-      if (availableRecipes.length === 0) break;
+      // Pega a próxima receita que ainda não atingiu o alvo
+      const nextRecipe = recipesWithCount.find(r => 
+        r.currentCount < r.targetCount && 
+        !activeRecipes.some(ar => ar.recipe.name === r.name)
+      ) || recipesWithCount[0]; // Se todas atingiram o alvo, pega a primeira
 
-      // Seleciona uma receita aleatória, considerando a frequência
-      const totalFrequency = availableRecipes.reduce((sum, r) => sum + (r.frequency || 1), 0);
-      let random = Math.random() * totalFrequency;
-      let selectedRecipe;
-      
-      for (const recipe of availableRecipes) {
-        random -= (recipe.frequency || 1);
-        if (random <= 0) {
-          selectedRecipe = recipe;
-          break;
-        }
-      }
+      if (!nextRecipe) break;
 
-      // Calcula quantas porções são necessárias
-      const portionsNeeded = Math.ceil(people / (selectedRecipe.serves || 4));
-      const daysLast = Math.min(selectedRecipe.days || 1, Math.ceil(portionsNeeded / 2));
+      // Calcula duração
+      const portionsNeeded = Math.ceil(people / (nextRecipe.serves || 4));
+      const daysLast = Math.min(nextRecipe.days || 1, Math.ceil(portionsNeeded / 2));
 
-      // Adiciona ao cardápio do dia
+      // Adiciona ao cardápio
       dailyMeals.push({
-        name: selectedRecipe.name,
-        recipe: selectedRecipe,
-        suggested: false,
-        isCookingDay: true, // É dia de cozinhar esta receita
+        name: nextRecipe.name,
+        recipe: nextRecipe,
+        isCookingDay: true,
         portions: portionsNeeded
       });
 
-      // Se a receita durar mais de 1 dia, adiciona às ativas
+      // Atualiza contagem
+      nextRecipe.currentCount++;
+
+      // Se durar mais de 1 dia, adiciona às ativas
       if (daysLast > 1) {
         activeRecipes.push({
-          recipe: selectedRecipe,
-          daysLeft: daysLast - 1, // Já contamos o dia atual
-          isCookingDay: false
+          recipe: nextRecipe,
+          daysLeft: daysLast - 1
         });
       }
     }
