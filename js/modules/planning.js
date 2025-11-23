@@ -79,14 +79,14 @@ function generatePlan() {
   });
 
   const plan = [];
-  const activeRecipes = []; // { recipe, daysLeft }
+  let activeRecipes = []; // { recipe, daysLeft }
 
   for (let day = 0; day < days; day++) {
     const dailyMeals = [];
     
     // 2. Atualiza receitas ativas
-    activeRecipes.forEach(recipe => recipe.daysLeft--);
-    activeRecipes = activeRecipes.filter(r => r.daysLeft > 0);
+    activeRecipes.forEach(recipe => recipe.mealsLeft--);
+    activeRecipes = activeRecipes.filter(r => r.mealsLeft > 0);
 
     // 3. Adiciona receitas ativas ao dia
     activeRecipes.forEach(active => {
@@ -114,24 +114,26 @@ function generatePlan() {
 
       // Calcula duração
       const portionsNeeded = Math.ceil(people / (nextRecipe.serves || 4));
-      const daysLast = Math.min(nextRecipe.days || 1, Math.ceil(portionsNeeded / 2));
+      const mealsLast = nextRecipe.meals || 1;
 
+      // Verifica se a receita dura mais de 1 dia
+      const isMultiDay = mealsLast > 1;
+      
       // Adiciona ao cardápio
       dailyMeals.push({
         name: nextRecipe.name,
         recipe: nextRecipe,
-        isCookingDay: true,
-        portions: portionsNeeded
+        isCookingDay: isMultiDay // Só marca como dia de cozinhar se for multi-dia
       });
 
       // Atualiza contagem
       nextRecipe.currentCount++;
 
       // Se durar mais de 1 dia, adiciona às ativas
-      if (daysLast > 1) {
+      if (mealsLast > 1) {  // Se dura mais de uma refeição
         activeRecipes.push({
           recipe: nextRecipe,
-          daysLeft: daysLast - 1
+          mealsLeft: mealsLast - 1  // Já contamos a primeira refeição
         });
       }
     }

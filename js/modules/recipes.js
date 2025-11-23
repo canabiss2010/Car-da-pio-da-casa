@@ -18,15 +18,20 @@ export function showRecipes() {
         <input id="m_recName" placeholder="Nome da receita" style="flex:1" />
         <input id="m_recServes" type="number" placeholder="Rende" value="4" min="1" style="width:80px" />
       </div>
-      <div style="display:flex;gap:8px;margin-bottom:8px">
-        <select id="m_recFrequency" style="flex:1">
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <select id="m_recFrequency" style="flex:1;min-width:120px">
           <option value="1">Muito Raro</option>
           <option value="2">Raro</option>
           <option value="3" selected>Moderado</option>
           <option value="4">Frequente</option>
           <option value="5">Muito Frequente</option>
         </select>
-        <input id="m_recDays" type="number" placeholder="Duração (dias)" min="1" value="2" style="width:120px" />
+        <select id="m_recCategory" style="min-width:140px">
+          <option value="proteina">Proteína</option>
+          <option value="carboidrato">Carboidrato</option>
+          <option value="verdura" selected>Verdura</option>
+        </select>
+        <input id="m_recDays" type="number" placeholder="Duração (dias)" min="1" value="2" style="width:100px" />
       </div>
       <label>Ingredientes (um por linha: nome,quantidade,unidade)</label>
       <textarea id="m_recIngredients" rows="6" placeholder="arroz,2,xic\nfeijao,1,kg" style="width:100%"></textarea>
@@ -52,26 +57,68 @@ function renderRecipeList() {
     return;
   }
 
-  window.recipes.forEach((recipe, idx) => {
-    const node = document.createElement('div');
-    node.className = 'item';
-    const freqInfo = frequencyLevels.find(f => f.level === (recipe.frequency || 3)) || frequencyLevels[2];
-    node.innerHTML = `
-      <div style="flex:1">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <strong style="text-transform:capitalize">${recipe.name}</strong>
-          <div class="small">${freqInfo.label} • ${recipe.serves} porções</div>
-        </div>
-        <div class="small" style="margin-top:4px">
-          Dura ${recipe.days} dias • ${recipe.ingredients.length} ingredientes
-        </div>
+  // Agrupa receitas por categoria
+  const recipesByCategory = window.recipes.reduce((acc, recipe) => {
+    const category = recipe.category || 'outros';
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push(recipe);
+    return acc;
+  }, {});
+
+  // Ordem desejada das categorias
+  const categoryOrder = ['proteina', 'carboidrato', 'verdura', 'outros'];
+  
+  // Renderiza cada categoria
+  categoryOrder.forEach(category => {
+    if (!recipesByCategory[category]) return;
+
+    const categoryName = {
+      'proteina': 'Proteínas',
+      'carboidrato': 'Carboidratos',
+      'verdura': 'Verduras e Legumes',
+      'outros': 'Outros'
+    }[category] || 'Outros';
+
+    const categoryEl = document.createElement('div');
+    categoryEl.className = 'category-section';
+    categoryEl.innerHTML = `
+      <div class="category-header">
+        <h3>${categoryName}</h3>
       </div>
-      <div style="display:flex;gap:4px">
-        <button data-idx="${idx}" data-action="edit" class="btn-ghost">Editar</button>
-        <button data-idx="${idx}" data-action="delete" class="btn-ghost">Excluir</button>
-      </div>
+      <div class="recipes-container" id="category-${category}"></div>
     `;
-    el.appendChild(node);
+    el.appendChild(categoryEl);
+
+    // Renderiza as receitas desta categoria
+    const container = qs(`#category-${category}`);
+    recipesByCategory[category].forEach((recipe, idx) => {
+      const node = document.createElement('div');
+      node.className = 'item';
+      const freqInfo = frequencyLevels.find(f => f.level === (recipe.frequency || 3)) || frequencyLevels[2];
+      
+      node.innerHTML = `
+        <div style="flex:1">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>${recipe.name}</strong>
+            <div class="small">${freqInfo.label} • ${recipe.serves} porções</div>
+          </div>
+          <div class="small" style="margin-top:4px">
+            Dura ${recipe.days} dias • ${recipe.ingredients.length} ingredientes
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button data-idx="${getRecipeIndex(recipe)}" data-action="edit" class="btn-ghost">
+              <i class="fas fa-edit"></i> Editar
+            </button>
+            <button data-idx="${getRecipeIndex(recipe)}" data-action="delete" class="btn-ghost">
+              <i class="fas fa-trash"></i> Excluir
+            </button>
+          </div>
+        </div>
+      `;
+      container.appendChild(node);
+    });
   });
 
   // Adiciona os eventos dos botões
@@ -79,14 +126,16 @@ function renderRecipeList() {
     btn.addEventListener('click', (e) => {
       const idx = Number(btn.dataset.idx);
       const action = btn.dataset.action;
+      const recipe = window.recipes[idx];
+      
+      if (!recipe) return;
       
       if (action === 'delete') {
-        if (confirm(`Tem certeza que deseja excluir a receita "${window.recipes[idx].name}"?`)) {
-          const name = window.recipes[idx].name;
+        if (confirm(`Tem certeza que deseja excluir a receita "${recipe.name}"?`)) {
           window.recipes.splice(idx, 1);
           window.saveAll();
           renderRecipeList();
-          setAlert(`Receita excluída: ${name}`, 'success');
+          setAlert(`Receita excluída: ${recipe.name}`, 'success');
         }
       } else if (action === 'edit') {
         loadRecipeForEdit(idx);
@@ -94,29 +143,43 @@ function renderRecipeList() {
     });
   });
 }
+// Função auxiliar para encontrar o índice de uma receita
+function getRecipeIndex(recipe) {
+  return window.recipes.findIndex(r => 
+    r.name === recipe.name && 
+    JSON.stringify(r.ingredients) === JSON.stringify(recipe.ingredients)
+  );
+}
 
 function loadRecipeForEdit(idx) {
   const recipe = window.recipes[idx];
-  qs('#m_recName').value = recipe.name;
-  qs('#m_recServes').value = recipe.serves;
-  qs('#m_recDays').value = recipe.days;
+  if (!recipe) return;
   
-  // Define a frequência correta no select
+  const nameInput = qs('#m_recName');
+  const servesInput = qs('#m_recServes');
+  const daysInput = qs('#m_recDays');
+  const categorySelect = qs('#m_recCategory');
   const frequencySelect = qs('#m_recFrequency');
-  if (frequencySelect) {
-    frequencySelect.value = recipe.frequency || 3;
-  }
+  const ingredientsTextarea = qs('#m_recIngredients');
+  
+  if (nameInput) nameInput.value = recipe.name || '';
+  if (servesInput) servesInput.value = recipe.serves || 1;
+  if (daysInput) daysInput.value = recipe.days || 2;
+  if (categorySelect) categorySelect.value = recipe.category || 'verdura';
+  if (frequencySelect) frequencySelect.value = recipe.frequency || 3;
   
   // Preenche os ingredientes
-  qs('#m_recIngredients').value = recipe.ingredients
-    .map(ing => {
-      const name = ing.name || '';
-      const qty = typeof ing.qty !== 'undefined' ? ing.qty : '';
-      const unit = ing.unit || '';
-      return `${name},${qty},${unit}`;
-    })
-    .filter(line => line !== ',,')
-    .join('\n');
+  if (ingredientsTextarea) {
+    ingredientsTextarea.value = recipe.ingredients
+      .map(ing => {
+        const name = ing.name || '';
+        const qty = typeof ing.qty !== 'undefined' ? ing.qty : '';
+        const unit = ing.unit || '';
+        return `${name},${qty},${unit}`;
+      })
+      .filter(line => line !== ',,')
+      .join('\n');
+  }
 
   // Remove a receita antiga
   window.recipes.splice(idx, 1);
@@ -127,6 +190,7 @@ function loadRecipeForEdit(idx) {
 }
 
 document.addEventListener('click', (e) => {
+
   // Salvar receita
   if (e.target.id === 'm_addRec') {
     const name = qs('#m_recName').value.trim();
