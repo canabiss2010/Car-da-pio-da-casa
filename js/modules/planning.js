@@ -57,11 +57,6 @@ export function showCreatePlan() {
   }, 100);
 }
 
-function getFrequencyPercentage(level) {
-  const freq = frequencyLevels.find(f => f.level === level);
-  return freq ? freq.percentage : 10; // Default para 10% se não encontrar
-}
-
 function generatePlan() {
   const people = parseInt(qs('#m_people').value) || 4;
   const days = parseInt(qs('#m_days').value) || 7;

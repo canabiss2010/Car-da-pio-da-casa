@@ -1,16 +1,31 @@
 // js/modules/recipes.js
 import { qs, getIngredientName } from './utils.js';
 import { openModal, closeModal, setAlert } from './ui.js';
+
+const frequencyLevels = [
+  { level: 1, percentage: 10, label: 'Muito Raro' },
+  { level: 2, percentage: 25, label: 'Raro' },
+  { level: 3, percentage: 50, label: 'Moderado' },
+  { level: 4, percentage: 75, label: 'Frequente' },
+  { level: 5, percentage: 90, label: 'Muito Frequente' }
+];
+
 let currentEditIndex = -1;
 export function showRecipes() {
   const html = `
     <div style="margin-bottom: 16px">
       <div style="display:flex;gap:8px;margin-bottom:8px">
         <input id="m_recName" placeholder="Nome da receita" style="flex:1" />
-        <input id="m_recServes" type="number" placeholder="Rende" value="4" style="width:80px" />
+        <input id="m_recServes" type="number" placeholder="Rende" value="4" min="1" style="width:80px" />
       </div>
       <div style="display:flex;gap:8px;margin-bottom:8px">
-        <input id="m_recPriority" type="number" placeholder="Prioridade (1-10)" min="1" max="10" value="5" style="flex:1" />
+        <select id="m_recFrequency" style="flex:1">
+          <option value="1">Muito Raro</option>
+          <option value="2">Raro</option>
+          <option value="3" selected>Moderado</option>
+          <option value="4">Frequente</option>
+          <option value="5">Muito Frequente</option>
+        </select>
         <input id="m_recDays" type="number" placeholder="Duração (dias)" min="1" value="2" style="width:120px" />
       </div>
       <label>Ingredientes (um por linha: nome,quantidade,unidade)</label>
@@ -22,12 +37,14 @@ export function showRecipes() {
     </div>
     <div id="m_recList" class="list"></div>
   `;
-
   openModal('Receitas', html);
   renderRecipeList();
 }
+
 function renderRecipeList() {
   const el = qs('#m_recList');
+  if (!el) return;
+  
   el.innerHTML = '';
 
   if (window.recipes.length === 0) {
@@ -38,13 +55,16 @@ function renderRecipeList() {
   window.recipes.forEach((recipe, idx) => {
     const node = document.createElement('div');
     node.className = 'item';
+    const freqInfo = frequencyLevels.find(f => f.level === (recipe.frequency || 3)) || frequencyLevels[2];
     node.innerHTML = `
       <div style="flex:1">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <strong style="text-transform:capitalize">${recipe.name}</strong>
-          <div class="small">P${recipe.priority} • ${recipe.serves} porções</div>
+          <div class="small">${freqInfo.label} • ${recipe.serves} porções</div>
         </div>
-        <div class="small" style="margin-top:4px">Dura ${recipe.days} dias • ${recipe.ingredients.length} ingredientes</div>
+        <div class="small" style="margin-top:4px">
+          Dura ${recipe.days} dias • ${recipe.ingredients.length} ingredientes
+        </div>
       </div>
       <div style="display:flex;gap:4px">
         <button data-idx="${idx}" data-action="edit" class="btn-ghost">Editar</button>
@@ -54,7 +74,7 @@ function renderRecipeList() {
     el.appendChild(node);
   });
 
-  // Eventos dos botões
+  // Adiciona os eventos dos botões
   el.querySelectorAll('button[data-idx]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const idx = Number(btn.dataset.idx);
@@ -66,7 +86,7 @@ function renderRecipeList() {
           window.recipes.splice(idx, 1);
           window.saveAll();
           renderRecipeList();
-          setAlert(`Receita excluída: ${name}`);
+          setAlert(`Receita excluída: ${name}`, 'success');
         }
       } else if (action === 'edit') {
         loadRecipeForEdit(idx);
@@ -74,31 +94,44 @@ function renderRecipeList() {
     });
   });
 }
+
 function loadRecipeForEdit(idx) {
   const recipe = window.recipes[idx];
   qs('#m_recName').value = recipe.name;
   qs('#m_recServes').value = recipe.serves;
-  qs('#m_recPriority').value = recipe.priority;
   qs('#m_recDays').value = recipe.days;
+  
+  // Define a frequência correta no select
+  const frequencySelect = qs('#m_recFrequency');
+  if (frequencySelect) {
+    frequencySelect.value = recipe.frequency || 3;
+  }
+  
+  // Preenche os ingredientes
   qs('#m_recIngredients').value = recipe.ingredients
-    .map(ing => `${ing.name},${ing.qty},${ing.unit}`)
+    .map(ing => {
+      const name = ing.name || '';
+      const qty = typeof ing.qty !== 'undefined' ? ing.qty : '';
+      const unit = ing.unit || '';
+      return `${name},${qty},${unit}`;
+    })
+    .filter(line => line !== ',,')
     .join('\n');
 
   // Remove a receita antiga
   window.recipes.splice(idx, 1);
   window.saveAll();
   renderRecipeList();
-  setAlert(`Editando: ${recipe.name}. Faça as alterações e clique em Salvar.`);
+  setAlert(`Editando: ${recipe.name}. Faça as alterações e clique em Salvar.`, 'info');
   currentEditIndex = idx;
 }
 
-// Event listeners
 document.addEventListener('click', (e) => {
   // Salvar receita
   if (e.target.id === 'm_addRec') {
     const name = qs('#m_recName').value.trim();
     const serves = parseInt(qs('#m_recServes').value) || 1;
-    const priority = Math.min(10, Math.max(1, parseInt(qs('#m_recPriority').value) || 5));
+    const frequency = parseInt(qs('#m_recFrequency').value) || 3;
     const days = Math.max(1, parseInt(qs('#m_recDays').value) || 2);
     
     const ingredientsText = qs('#m_recIngredients').value.trim();
@@ -116,31 +149,37 @@ document.addEventListener('click', (e) => {
       })
       .filter(ing => ing.name && !isNaN(ing.qty) && ing.qty > 0);
 
-    if (!name) return alert('Digite um nome para a receita');
-    if (ingredients.length === 0) return alert('Adicione pelo menos um ingrediente');
+    if (!name) return setAlert('Digite um nome para a receita', 'error');
+    if (ingredients.length === 0) return setAlert('Adicione pelo menos um ingrediente', 'error');
 
-    const recipe = { name, serves, priority, days, ingredients };
+    const recipe = { 
+      name, 
+      serves, 
+      frequency,  // Usando frequency ao invés de priority
+      days, 
+      ingredients 
+    };
 
-   if (currentEditIndex >= 0) {
-    // Se está editando, substitui a receita existente
-    window.recipes.splice(currentEditIndex, 0, recipe);
-    currentEditIndex = -1; // Reseta o índice de edição
-   } else {
-    // Se é uma nova receita, adiciona normalmente
-    window.recipes.push(recipe);
-   }
+    if (currentEditIndex >= 0) {
+      // Se está editando, substitui a receita existente
+      window.recipes.splice(currentEditIndex, 0, recipe);
+      currentEditIndex = -1;
+    } else {
+      // Se é uma nova receita, adiciona normalmente
+      window.recipes.push(recipe);
+    }
     
     window.saveAll();
     
     // Limpa o formulário
     qs('#m_recName').value = '';
     qs('#m_recServes').value = '4';
-    qs('#m_recPriority').value = '5';
+    qs('#m_recFrequency').value = '3';
     qs('#m_recDays').value = '2';
     qs('#m_recIngredients').value = '';
     
     renderRecipeList();
-    setAlert(`Receita ${currentEditIndex >= 0 ? 'atualizada' : 'salva'}: ${name}`);
+    setAlert(`Receita ${currentEditIndex >= 0 ? 'atualizada' : 'salva'}: ${name}`, 'success');
   }
 
   // Limpar formulário
@@ -148,9 +187,10 @@ document.addEventListener('click', (e) => {
     if (confirm('Limpar o formulário de receita?')) {
       qs('#m_recName').value = '';
       qs('#m_recServes').value = '4';
-      qs('#m_recPriority').value = '5';
+      qs('#m_recFrequency').value = '3';
       qs('#m_recDays').value = '2';
       qs('#m_recIngredients').value = '';
+      currentEditIndex = -1;
     }
   }
 });
