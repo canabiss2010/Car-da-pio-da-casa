@@ -1,11 +1,18 @@
 // js/modules/inventory.js
 import { qs, parseLine } from './utils.js';
 import { openModal, setAlert } from './ui.js';
+import { barcodeScanner } from './barcode.js';
 
-export function showInventory() {
+
+export function showInventory() {}
   const html = `
     <label style="font-size: 1.1em;">Cole os itens (um por linha)</label>
     <textarea id="m_invBulk" rows="6" placeholder="arroz,2,kg\nleite,2,l"></textarea>
+
+    <button id="startBarcode" class="btn" style="width: 100%; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+      <span>Ler Código de Barras</span>
+    </button>
+
     <div style="display:flex;gap:8px;margin-top:8px">
       <button id="m_paste" class="btn">Adicionar itens</button>
       <button id="m_clearInv" class="btn-ghost">Limpar</button>
@@ -15,6 +22,18 @@ export function showInventory() {
   
   openModal('Dispensa', html);
   renderList();
+  
+  const barcodeBtn = qs('#startBarcode');
+  if (barcodeBtn) {
+    barcodeBtn.addEventListener('click', async () => {
+      try {
+        await barcodeScanner.ready; // Aguarda o scanner estar pronto
+        barcodeScanner.open();
+    } catch (error) {
+      console.error('Erro:', error);
+      setAlert('Não foi possível abrir o leitor de códigos', 'error');
+    }
+  });
 }
 
 // Função para normalizar texto (remover acentos e caracteres especiais)
@@ -93,6 +112,7 @@ function renderList() {
     });
   });
 }
+
 // Adicionar item único
 document.addEventListener('click', (e) => {
   // Adicionar vários itens
@@ -127,4 +147,4 @@ document.addEventListener('click', (e) => {
     renderList();
     setAlert('Inventário limpo');
   }
-});
+});//

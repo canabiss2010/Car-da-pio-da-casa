@@ -2,6 +2,7 @@
 import { STORAGE_KEYS } from './config.js';
 import * as UI from './modules/ui.js';
 import { qs, validateJSON } from './modules/utils.js';
+import { barcodeScanner } from './modules/barcode.js';
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
   console.log('App inicializado!');
@@ -118,3 +119,4 @@ function setupServiceWorker() {
 // Torna funções disponíveis globalmente
 window.saveAll = saveAll;
 window.loadModule = loadModule;
+window.barcodeScanner = barcodeScanner;
