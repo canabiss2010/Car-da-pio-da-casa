@@ -16,7 +16,6 @@ export function showRecipes() {
     <div style="margin-bottom: 16px">
       <div style="display:flex;gap:8px;margin-bottom:8px">
         <input id="m_recName" placeholder="Nome da receita" style="flex:1" />
-        <input id="m_recServes" type="number" placeholder="Rende" value="4" min="1" style="width:80px" />
       </div>
       <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
         <select id="m_recFrequency" style="flex:1;min-width:120px">
@@ -27,11 +26,16 @@ export function showRecipes() {
           <option value="5">Muito Frequente</option>
         </select>
         <select id="m_recCategory" style="min-width:140px">
-          <option value="proteina">Proteína</option>
-          <option value="carboidrato">Carboidrato</option>
-          <option value="verdura" selected>Verdura</option>
+          <option value="proteina">Proteínas</option>
+          <option value="carboidrato">Carboidratos</option>
+          <option value="vegetais" selected>Vegetais</option>
+          <option value="outros">Outros</option>
         </select>
-        <input id="m_recDays" type="number" placeholder="Duração (dias)" min="1" value="2" style="width:100px" />
+        <div style="display:flex;align-items:center;gap:4px;margin:0 8px">
+          <span>Dura</span>
+          <input id="m_recDays" type="number" min="1" value="2" style="width:50px;text-align:center" />
+          <span> dias</span>
+        </div>  
       </div>
       <label>Ingredientes (um por linha: nome,quantidade,unidade)</label>
       <textarea id="m_recIngredients" rows="6" placeholder="arroz,2,xic\nfeijao,1,kg" style="width:100%"></textarea>
@@ -91,9 +95,14 @@ function renderRecipeList() {
     `;
     el.appendChild(categoryEl);
 
+    // Ordena as receitas da categoria em ordem alfabética
+    const sortedRecipes = [...recipesByCategory[category]].sort((a, b) => 
+      a.name.localeCompare(b.name, 'pt-BR', {sensitivity: 'base'})
+    );
+
     // Renderiza as receitas desta categoria
     const container = qs(`#category-${category}`);
-    recipesByCategory[category].forEach((recipe, idx) => {
+    sortedRecipes.forEach((recipe, idx) => {
       const node = document.createElement('div');
       node.className = 'item';
       const freqInfo = frequencyLevels.find(f => f.level === (recipe.frequency || 3)) || frequencyLevels[2];
@@ -102,17 +111,16 @@ function renderRecipeList() {
         <div style="flex:1">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <strong>${recipe.name}</strong>
-            <div class="small">${freqInfo.label} • ${recipe.serves} porções</div>
           </div>
           <div class="small" style="margin-top:4px">
-            Dura ${recipe.days} dias • ${recipe.ingredients.length} ingredientes
+            Dura ${recipe.days} dias •   ${freqInfo.label}
           </div>
           <div style="display:flex;gap:8px;margin-top:8px">
             <button data-idx="${getRecipeIndex(recipe)}" data-action="edit" class="btn-ghost">
-              <i class="fas fa-edit"></i> Editar
+              Editar
             </button>
             <button data-idx="${getRecipeIndex(recipe)}" data-action="delete" class="btn-ghost">
-              <i class="fas fa-trash"></i> Excluir
+              Excluir
             </button>
           </div>
         </div>
@@ -193,8 +201,7 @@ document.addEventListener('click', (e) => {
 
   // Salvar receita
   if (e.target.id === 'm_addRec') {
-    const name = qs('#m_recName').value.trim();
-    const serves = parseInt(qs('#m_recServes').value) || 1;
+    const name = qs('#m_recName').value.trim().toLowerCase().replace(/^\w/, c => c.toUpperCase());
     const frequency = parseInt(qs('#m_recFrequency').value) || 3;
     const days = Math.max(1, parseInt(qs('#m_recDays').value) || 2);
     
@@ -216,11 +223,12 @@ document.addEventListener('click', (e) => {
     if (!name) return setAlert('Digite um nome para a receita', 'error');
     if (ingredients.length === 0) return setAlert('Adicione pelo menos um ingrediente', 'error');
 
+    const category = qs('#m_recCategory').value || 'outros';
     const recipe = { 
       name, 
-      serves, 
       frequency,  // Usando frequency ao invés de priority
-      days, 
+      days,
+      category,
       ingredients 
     };
 

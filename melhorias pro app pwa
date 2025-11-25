@@ -2,7 +2,6 @@ melhorias pro app pwa
 
 0,5- adiconar/destacar qual dia tem q cozinhar a receita e ter uma funcao/botao pra escolher que só cozinhara para o almoco, de forma q dure pra janta tambem 
 1- adicionar categorias para as receitas 
-2- checar todas as funcionalidades, se ta adicionando corretamente
 3-explicar oq é cada numero que deve ser escolido ao criar uma receita, no bloco receitas(n de pessoas, quando tempo dura, frequencia )
 4- deixar visualmente bonito o bloco criar receitas, juntando a descricao das receitas deois de adicionadas, >mostrar foto<
 5- agrupar os ingredientes com mesmo nome quando adicionados na dispensa 
@@ -10,4 +9,20 @@ melhorias pro app pwa
 7- tirar a opcao de adicionar um ingrediente por vez
 8- tem q explicar oq significa a sujestão em laranja 
 9- os avisos somem depois de um tempo
+2- checar todas as funcionalidades, se ta adicionando corretamente
+10- colocar um corretor ortografico 
+11- ter a possibilidade de uma receitas estar em 2 categorias
+12- Observações importantes:
+Não há validação de unidades de medida
+Não há conversão automática entre unidades
+O sistema não verifica se a unidade existe ou faz sentido
 
+
+HOJE 
+
+Sub lista:
+1- Deixar o nome das reciata em maiusculo
+2- deixar as receitas em ordem alfabética
+3- Deixar as classificacaoes das receitas visluamente juntas
+4- Terminar a organizacao das receitas por categoria/fazer aparecer visluamente cada uma na sua categoria
+5- Explicar oq é cada classificacao da receitas/filtrar o necessario 
