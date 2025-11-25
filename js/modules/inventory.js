@@ -4,14 +4,10 @@ import { openModal, setAlert } from './ui.js';
 
 export function showInventory() {
   const html = `
-    <div style="display:flex;gap:8px">
-      <input id="m_invLine" placeholder="ex: arroz,2,kg" />
-      <button id="m_addInv" class="btn-ghost">Adicionar</button>
-    </div>
-    <label style="margin-top:8px">Cole várias linhas</label>
+    <label style="font-size: 1.1em;">Cole os itens (um por linha)</label>
     <textarea id="m_invBulk" rows="6" placeholder="arroz,2,kg\nleite,2,l"></textarea>
     <div style="display:flex;gap:8px;margin-top:8px">
-      <button id="m_paste" class="btn">Adicionar todas</button>
+      <button id="m_paste" class="btn">Adicionar itens</button>
       <button id="m_clearInv" class="btn-ghost">Limpar</button>
     </div>
     <div id="m_invList" class="list" style="margin-top:12px"></div>
@@ -20,6 +16,12 @@ export function showInventory() {
   openModal('Dispensa', html);
   renderList();
 }
+
+// Função para normalizar texto (remover acentos e caracteres especiais)
+function normalizeText(text) {
+  return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
 function renderList() {
   const el = qs('#m_invList'); 
   el.innerHTML = '';
@@ -29,27 +31,62 @@ function renderList() {
     return;
   }
   
-  window.inventory.forEach((item, idx) => {
+  // Agrupa itens por nome (normalizado) e unidade
+  const groupedItems = window.inventory.reduce((acc, item) => {
+    const normalizedItem = {
+      ...item,
+      originalName: item.name, // Mantém o nome original para exibição
+      normalizedName: normalizeText(item.name) // Nome normalizado para agrupamento
+    };
+    
+    const key = `${normalizedItem.normalizedName}_${item.unit}`;
+    
+    if (!acc[key]) {
+      acc[key] = { ...normalizedItem };
+    } else {
+      acc[key].qty += normalizedItem.qty;
+      // Mantém o nome com a primeira letra maiúscula se existir
+      if (normalizedItem.originalName[0] === normalizedItem.originalName[0].toUpperCase()) {
+        acc[key].name = normalizedItem.originalName;
+        acc[key].originalName = normalizedItem.originalName;
+      }
+    }
+    return acc;
+  }, {});
+  
+  // Ordena os itens por nome
+  const sortedItems = Object.values(groupedItems).sort((a, b) => 
+    a.normalizedName.localeCompare(b.normalizedName)
+  );
+  
+  // Renderiza os itens agrupados
+  sortedItems.forEach((item) => {
     const node = document.createElement('div'); 
     node.className = 'item';
     node.innerHTML = `
       <div style="max-width:70%">
-        <strong style="text-transform:capitalize">${item.name}</strong>
+        <strong style="text-transform:capitalize">${item.originalName || item.name}</strong>
         <div class="small">${item.qty} ${item.unit}</div>
       </div>
       <div>
-        <button data-idx="${idx}" class="btn-ghost">Remover</button>
+        <button data-name="${item.name}" data-unit="${item.unit}" class="btn-ghost">Remover</button>
       </div>
     `;
     el.appendChild(node);
   });
 
-  // Eventos dos botões de remover
-  el.querySelectorAll('button[data-idx]').forEach(btn => {
+  // Atualiza os eventos dos botões de remover
+  el.querySelectorAll('button[data-name]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const idx = Number(btn.dataset.idx);
-      const name = window.inventory[idx]?.name || 'item';
-      window.inventory.splice(idx, 1);
+      const name = btn.dataset.name;
+      const unit = btn.dataset.unit;
+      const normalizedSearch = normalizeText(name);
+      
+      // Remove todos os itens com o mesmo nome (normalizado) e unidade
+      window.inventory = window.inventory.filter(item => {
+        return !(normalizeText(item.name) === normalizedSearch && item.unit === unit);
+      });
+      
       window.saveAll();
       renderList();
       setAlert(`Item removido: ${name}`);
@@ -58,20 +95,6 @@ function renderList() {
 }
 // Adicionar item único
 document.addEventListener('click', (e) => {
-  if (e.target.id === 'm_addInv') {
-    const input = qs('#m_invLine').value.trim();
-    if (!input) return alert('Digite: nome,quantidade,unidade');
-    
-    const item = parseLine(input);
-    if (!item) return alert('Formato inválido. Use: nome,quantidade,unidade');
-    
-    window.inventory.push(item);
-    window.saveAll();
-    qs('#m_invLine').value = '';
-    renderList();
-    setAlert(`Item adicionado: ${item.name}`);
-  }
-
   // Adicionar vários itens
   if (e.target.id === 'm_paste') {
     const text = qs('#m_invBulk').value.trim();
