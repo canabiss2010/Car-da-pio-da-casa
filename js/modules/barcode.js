@@ -1,302 +1,280 @@
-// Importa as ferramentas que vamos usar
+// Importa as ferramentas necessárias
 import { qs } from './utils.js';
 import { setAlert } from './ui.js';
 
-// Verifica se o ZXing está disponível
-function getZXing() {
-  if (window.ZXing) {
-    return Promise.resolve(window.ZXing);
-  }
-  
-  return new Promise((resolve, reject) => {
-    const checkZXing = () => {
-      if (window.ZXing) {
-        resolve(window.ZXing);
-      } else {
-        setTimeout(checkZXing, 100);
-      }
-    };
-    checkZXing();
-  });
-}
-
-// Cria a classe do leitor de códigos de barras
 class BarcodeScanner {
   constructor() {
-    this.modal = null;
     this.stream = null;
-    this.codeReader = null;
-    this.scanning = false;
-    this.ready = this.initialize(); // Inicializa e armazena a promessa
+    this.videoElement = null;
+    this.modal = null;
   }
 
-  async initialize() {
+  // Método principal para abrir o leitor
+  async open() {
     try {
-      const ZXing = await getZXing();
-      this.codeReader = new ZXing.BrowserMultiFormatReader();
-      console.log('Leitor de código de barras pronto!');
-      this.init(); // Chama o init() original
-      return this; // Retorna a instância quando estiver pronto
+      // Verifica se já tem permissão ou solicita
+      const hasPermission = await this.checkCameraPermission();
+      if (!hasPermission) {
+        setAlert('Permissão para o uso da câmera negada, tente novamente', 'error');
+        return;
+      }
+
+      // Cria o modal se não existir
+      if (!this.modal) {
+        this.createModal();
+      } else {
+        this.modal.style.display = 'flex';
+      }
+
+      // Inicia a câmera
+      await this.startCamera();
+
+      // Ajusta a qualidade após 2 segundos
+      setTimeout(() => {
+        this.improveCameraQuality();
+      }, 2000);
+
     } catch (error) {
-      console.error('Erro ao carregar o ZXing:', error);
-      setAlert('Erro ao carregar o leitor de códigos de barras', 'error');
-      throw error; // Propaga o erro para quem chamou
+      console.error('Erro ao abrir o leitor:', error);
+      setAlert('Não foi possível acessar a câmera', 'error');
     }
   }
-  // Inicializa o leitor
-  init() {
-    this.createModal();       // Cria a janelinha
-    this.setupEventListeners();  // Configura os botões
+
+  // Verifica ou solicita permissão da câmera
+  async checkCameraPermission() {
+    try {
+      const permissionResult = await navigator.permissions.query({ name: 'camera' });
+      if (permissionResult.state === 'denied') {
+        return false;
+      }
+      return true;
+    } catch (error) {
+      // Se a API de permissões não estiver disponível, tenta acessar a câmera diretamente
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream.getTracks().forEach(track => track.stop());
+        return true;
+      } catch {
+        return false;
+      }
+    }
   }
 
-  // Cria a janelinha do leitor
+  // Cria a estrutura do modal
   createModal() {
     const modalHTML = `
-      <div id="barcodeModal" class="modal-back">
-        <div class="modal" style="max-width: 500px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-            <h3 style="margin: 0; color: var(--accent);">Ler Código de Barras</h3>
-            <button id="closeBarcode" class="btn-ghost" style="padding: 4px 8px;">
-              Fechar
-            </button>
-          </div>
+      <div id="barcodeModal" class="modal-back" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 12px; width: 90%; max-width: 500px; padding: 20px; position: relative;">
+          <button id="closeBarcode" style="position: absolute; top: 10px; right: 10px; background: none; border: none; font-size: 20px; cursor: pointer;">✕</button>
           
-          <div id="barcodeScanner" style="
-            width: 100%;
-            height: 300px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--muted);
-            border: 2px dashed #e0e0e0;
-            overflow: hidden;
-          ">
-            <div style="text-align: center; padding: 16px;">
-              <div style="font-size: 48px; margin-bottom: 8px;">📷</div>
-              <p style="margin: 0;">Aguardando permissão da câmera...</p>
+          <h3 style="margin: 0 0 15px 0; color: #333;">Ler Código de Barras</h3>
+          
+          <div id="barcodeViewport" style="width: 100%; height: 300px; background: #000; border-radius: 8px; overflow: hidden; margin-bottom: 15px; position: relative;">
+            <video id="barcodeVideo" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+            <div id="barcodeOverlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.5); color: white; font-size: 18px;">
+              Iniciando câmera...
             </div>
           </div>
           
-          <div style="display: flex; gap: 12px;">
-            <button id="toggleCamera" class="btn" style="flex: 1;">
-              Iniciar Câmera
-            </button>
-            <button id="scanButton" class="btn" style="flex: 1;" disabled>
-              Ler Código
-            </button>
-          </div>
+          <button id="captureBtn" style="width: 100%; padding: 12px; background: #4CAF50; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span>Ler Código</span> 📷
+          </button>
           
-          <div style="margin-top: 16px; padding: 12px; background: #f8f9fa; border-radius: 8px; display: none;" id="resultContainer">
-            <p style="margin: 0 0 8px 0; font-weight: 500;">Código lido:</p>
-            <div id="barcodeResult" style="
-              padding: 8px;
-              background: white;
-              border-radius: 4px;
-              font-family: monospace;
-              word-break: break-all;
-            "></div>
+          <div id="resultArea" style="margin-top: 15px; padding: 10px; border-radius: 6px; background: #f5f5f5; min-height: 24px; display: none;">
+            <!-- Aqui será exibido o resultado -->
           </div>
         </div>
       </div>
     `;
 
-    // Adiciona a janelinha ao final da página
+    // Adiciona o modal ao final do body
     document.body.insertAdjacentHTML('beforeend', modalHTML);
-    this.modal = qs('#barcodeModal');
+    this.modal = document.getElementById('barcodeModal');
+    
+    // Configura os eventos
+    this.setupModalEvents();
   }
 
-  // Configura os botões
-  setupEventListeners() {
-    const closeBtn = qs('#closeBarcode', this.modal);
-    const toggleCameraBtn = qs('#toggleCamera', this.modal);
-    const videoElement = document.createElement('video');
-    videoElement.style.width = '100%';
-    videoElement.style.height = '100%';
-    videoElement.style.objectFit = 'cover';
+  // Configura os eventos do modal
+  setupModalEvents() {
+    // Fechar modal
+    document.getElementById('closeBarcode').addEventListener('click', () => this.close());
     
-    // Quando clicar em Fechar
-    closeBtn.addEventListener('click', () => this.close());
+    // Capturar código
+    document.getElementById('captureBtn').addEventListener('click', () => this.captureAndDecode());
     
-    // Quando clicar em Iniciar/Parar Câmera
-    toggleCameraBtn.addEventListener('click', async () => {
-      try {
-        if (this.stream) {
-          await this.stopCamera();
-          toggleCameraBtn.textContent = 'Iniciar Câmera';
-          qs('#scanButton').disabled = true;
-        } else {
-          await this.startCamera(videoElement);
-          toggleCameraBtn.textContent = 'Parar Câmera';
-          qs('#scanButton').disabled = false;
-        }
-      } catch (error) {
-        console.error('Erro na câmera:', error);
-        setAlert(`Erro: ${error.message}`, 'error');
+    // Fechar ao clicar fora
+    this.modal.addEventListener('click', (e) => {
+      if (e.target === this.modal) {
+        this.close();
       }
-    });
-    
-    // Quando clicar em Ler Código
-    qs('#scanButton').addEventListener('click', () => {
-      this.simulateBarcodeRead();
     });
   }
 
   // Inicia a câmera
-async startCamera(videoElement) {
-  try {
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      video: { 
-        facingMode: 'environment',
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
+  async startCamera() {
+    try {
+      this.videoElement = document.getElementById('barcodeVideo');
+      const overlay = document.getElementById('barcodeOverlay');
+      
+      // Para a câmera se já estiver ativa
+      if (this.stream) {
+        this.stopCamera();
       }
-    });
 
-    const scannerElement = qs('#barcodeScanner');
-    scannerElement.innerHTML = '';
-    scannerElement.appendChild(videoElement);
-    videoElement.srcObject = this.stream;
-    await videoElement.play();
-    
-    // Aguarda um pouco antes de começar a escanear
-    setTimeout(() => {
-      this.startScanning(videoElement);
-    }, 1000);
-    
-  } catch (error) {
-    console.error('Erro ao acessar câmera:', error);
-    this.updateScannerUI('Não foi possível acessar a câmera');
-    throw error;
+      // Inicia a câmera traseira
+      this.stream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      });
+
+      // Mostra o vídeo
+      this.videoElement.srcObject = this.stream;
+      overlay.textContent = 'Ajustando câmera...';
+
+      // Quando o vídeo estiver pronto
+      await new Promise((resolve) => {
+        this.videoElement.onloadedmetadata = () => {
+          this.videoElement.play().then(resolve);
+        };
+      });
+
+      // Esconde o overlay quando o vídeo estiver rodando
+      overlay.style.display = 'none';
+
+    } catch (error) {
+      console.error('Erro ao iniciar a câmera:', error);
+      throw error;
+    }
   }
-}
 
-  // Para a câmera
-  async stopCamera() {
-    this.stopScanning();
+  // Melhora a qualidade da câmera após iniciar
+  async improveCameraQuality() {
+    if (!this.stream) return;
+    
+    try {
+      const track = this.stream.getVideoTracks()[0];
+      if (!track) return;
+
+      // Tenta ajustar o foco
+      if (track.getCapabilities().focusMode) {
+        await track.applyConstraints({
+          advanced: [{
+            focusMode: 'continuous',
+            exposureMode: 'continuous'
+          }]
+        });
+      }
+
+      // Ajusta o zoom para melhorar a leitura
+      if (track.getCapabilities().zoom) {
+        const zoom = Math.min(2, track.getCapabilities().zoom.max || 2);
+        await track.applyConstraints({
+          advanced: [{ zoom }]
+        });
+      }
+
+    } catch (error) {
+      console.warn('Não foi possível ajustar a qualidade da câmera:', error);
+    }
+  }
+
+  // Captura e decodifica a imagem
+  async captureAndDecode() {
+    const resultArea = document.getElementById('resultArea');
+    const captureBtn = document.getElementById('captureBtn');
+    const originalText = captureBtn.innerHTML;
+    
+    try {
+      // Mostra feedback visual
+      captureBtn.disabled = true;
+      captureBtn.innerHTML = '<span>Processando...</span> 🔄';
+      resultArea.style.display = 'none';
+
+      // Cria um canvas para capturar o frame
+      const canvas = document.createElement('canvas');
+      canvas.width = this.videoElement.videoWidth;
+      canvas.height = this.videoElement.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(this.videoElement, 0, 0, canvas.width, canvas.height);
+
+      // Tenta decodificar o código de barras
+      const code = await this.decodeBarcode(canvas);
+      
+      if (code) {
+        // Sucesso
+        console.log('Código lido com sucesso:', code);
+        resultArea.textContent = `Código: ${code}`;
+        resultArea.style.color = 'green';
+      } else {
+        // Falha
+        console.log('Não foi possível ler o código');
+        resultArea.textContent = 'Tente novamente';
+        resultArea.style.color = 'red';
+      }
+
+      resultArea.style.display = 'block';
+
+    } catch (error) {
+      console.error('Erro ao processar a imagem:', error);
+      resultArea.textContent = 'Erro ao processar a imagem';
+      resultArea.style.color = 'red';
+      resultArea.style.display = 'block';
+    } finally {
+      // Restaura o botão
+      captureBtn.disabled = false;
+      captureBtn.innerHTML = originalText;
+    }
+  }
+
+  // Decodifica o código de barras usando a biblioteca ZXing
+  async decodeBarcode(canvas) {
+    try {
+      // Verifica se o ZXing está disponível
+      if (!window.ZXing) {
+        throw new Error('Biblioteca de leitura não carregada');
+      }
+
+      const zxing = await ZXing();
+      const imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+      
+      // Configura o leitor
+      const reader = new zxing.BrowserQRCodeReader();
+      const result = await reader.decodeFromImage(
+        null,
+        canvas.toDataURL('image/png')
+      );
+
+      return result?.text || null;
+
+    } catch (error) {
+      console.error('Erro ao decodificar:', error);
+      return null;
+    }
+  }
+
+  // Para a câmera e limpa os recursos
+  stopCamera() {
     if (this.stream) {
       this.stream.getTracks().forEach(track => track.stop());
       this.stream = null;
     }
-    this.updateScannerUI('Câmera desativada');
-  }
-
-  // Atualiza a mensagem na tela
-  updateScannerUI(message) {
-    const scannerElement = qs('#barcodeScanner');
-    if (scannerElement) {
-      scannerElement.innerHTML = `
-        <div style="text-align: center; padding: 16px;">
-          <div style="font-size: 48px; margin-bottom: 8px;">📷</div>
-          <p style="margin: 0;">${message}</p>
-        </div>
-      `;
+    if (this.videoElement) {
+      this.videoElement.srcObject = null;
     }
   }
 
-  // Inicia a leitura do código
-async startScanning(videoElement) {
-  if (this.scanning) return;
-  this.scanning = true;
-  
-  try {
-    // Limpa resultados anteriores
-    const resultContainer = qs('#resultContainer', this.modal);
-    const barcodeResult = qs('#barcodeResult', this.modal);
-    if (resultContainer) resultContainer.style.display = 'none';
-    if (barcodeResult) barcodeResult.textContent = '';
-
-    console.log('Iniciando leitura...');
-    
-    // Configurações otimizadas
-    const hints = new Map();
-    hints.set(window.ZXing.DecodeHintType.TRY_HARDER, true);
-    hints.set(window.ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-      window.ZXing.BarcodeFormat.EAN_13,
-      window.ZXing.BarcodeFormat.EAN_8,
-      window.ZXing.BarcodeFormat.UPC_A,
-      window.ZXing.BarcodeFormat.CODE_128
-    ]);
-
-    // Inicia a leitura
-    await this.codeReader.decodeFromConstraints(
-      {
-        video: {
-          facingMode: 'environment',
-          width: { min: 640, ideal: 1280, max: 1920 },
-          height: { min: 480, ideal: 720, max: 1080 }
-        }
-      },
-      videoElement,
-      (result, error) => {
-        if (result) {
-          console.log('Código detectado:', result.text);
-          this.handleBarcode(result.text);
-        }
-        if (error && !error.message.includes('Not Found')) {
-          console.warn('Erro na leitura:', error);
-        }
-      }
-    );
-
-  } catch (error) {
-    console.error('Erro no scanner:', error);
-    setAlert('Erro ao iniciar o scanner', 'error');
-    this.scanning = false;
-  }
-}
-
-  // Para de ler códigos
-  stopScanning() {
-    this.scanning = false;
-    this.codeReader.reset();
-  }
-
-  // Quando um código é lido
-  handleBarcode(barcode) {
-    console.log('Código de barras lido:', barcode);
-    this.stopScanning();
-    this.showResult(barcode);
-    setAlert(`Código lido: ${barcode}`, 'success');
-  }
-
-  // Mostra o resultado na tela
-  showResult(barcode) {
-    const resultContainer = qs('#resultContainer', this.modal);
-    const barcodeResult = qs('#barcodeResult', this.modal);
-    
-    barcodeResult.textContent = barcode;
-    resultContainer.style.display = 'block';
-    resultContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
-
-  // Função de simulação (para teste)
-  simulateBarcodeRead() {
-    const barcode = '7891234567890';  // Código de teste
-    this.handleBarcode(barcode);
-  }
-
-  // Abre a janelinha
-  open() {
-    this.modal.style.display = 'flex';
-    document.body.style.overflow = 'hidden';
-  }
-
-  // Fecha a janelinha
+  // Fecha o modal
   close() {
     this.stopCamera();
-    this.modal.style.display = 'none';
-    document.body.style.overflow = '';
-    
-    // Limpa os resultados
-    const resultContainer = qs('#resultContainer', this.modal);
-    const barcodeResult = qs('#barcodeResult', this.modal);
-    if (resultContainer) resultContainer.style.display = 'none';
-    if (barcodeResult) barcodeResult.textContent = '';
+    if (this.modal) {
+      this.modal.style.display = 'none';
+    }
   }
 }
 
-// Cria uma única instância do leitor
+// Exporta uma única instância do scanner
 export const barcodeScanner = new BarcodeScanner();
