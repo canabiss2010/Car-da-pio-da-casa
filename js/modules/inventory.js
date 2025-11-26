@@ -4,7 +4,7 @@ import { openModal, setAlert } from './ui.js';
 import { barcodeScanner } from './barcode.js';
 
 
-export function showInventory() {}
+export function showInventory() {
   const html = `
     <label style="font-size: 1.1em;">Cole os itens (um por linha)</label>
     <textarea id="m_invBulk" rows="6" placeholder="arroz,2,kg\nleite,2,l"></textarea>
@@ -23,17 +23,23 @@ export function showInventory() {}
   openModal('Dispensa', html);
   renderList();
   
+  // Configura o evento do botão de código de barras
   const barcodeBtn = qs('#startBarcode');
   if (barcodeBtn) {
-    barcodeBtn.addEventListener('click', async () => {
+    const handleBarcodeClick = async () => {
       try {
-        await barcodeScanner.ready; // Aguarda o scanner estar pronto
+        await barcodeScanner.ready;
         barcodeScanner.open();
-    } catch (error) {
-      console.error('Erro:', error);
-      setAlert('Não foi possível abrir o leitor de códigos', 'error');
-    }
-  });
+      } catch (error) {
+        console.error('Erro:', error);
+        setAlert('Não foi possível abrir o leitor de códigos', 'error');
+      }
+    };
+    
+    // Remove o listener antigo e adiciona um novo
+    barcodeBtn.removeEventListener('click', handleBarcodeClick);
+    barcodeBtn.addEventListener('click', handleBarcodeClick);
+  }
 }
 
 // Função para normalizar texto (remover acentos e caracteres especiais)

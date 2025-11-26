@@ -10,6 +10,9 @@ export function initUI() {
 
 export function openModal(title, contentHTML) {
   if (!modalBack || !modalContent) initUI();
+
+  closeModal();
+  
   modalContent.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center">
       <h2 style="margin:0">${title}</h2>
@@ -17,6 +20,7 @@ export function openModal(title, contentHTML) {
     </div>
     <div style="margin-top:12px">${contentHTML}</div>
   `;
+  
   modalBack.style.display = 'flex';
   qs('#closeModal')?.addEventListener('click', closeModal);
 }

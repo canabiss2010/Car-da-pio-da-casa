@@ -13,8 +13,8 @@ O sistema não verifica se a unidade existe ou faz sentido
 13- fazer uma lista de compras automaticamente 
 14- melhorar o visual, com cores, subtitulos e deixar tudo padrão
 
-HOJEE
+CODIGO DE BARRAS:
 
-7- tirar a opcao de adicionar um ingrediente por vez
-5- agrupar os ingredientes com mesmo nome quando adicionados na dispensa
-6- colocar o bendito leitor de codigo barra
+Colocar alguma coisa visual q indique que afoto esta sendo analisada
+organizar a ordem de (pedir permissao da camera>abrir o modal>inicial a camera>tirar foto>parar camera>mostra que esta carregando>responder sobre a analise da foto )
+futuramente: com os dados da analise da foto, adicionar à dispensa como ingrediente ( tem q colocar a biblioteca com o banco de dados pelo codigo)

@@ -151,6 +151,18 @@ function renderRecipeList() {
     });
   });
 }
+
+
+function clearRecipeForm() {
+  qs('#m_recName').value = '';
+  qs('#m_recFrequency').value = '3';
+  qs('#m_recCategory').value = 'vegetais';
+  qs('#m_recDays').value = '2';
+  qs('#m_recIngredients').value = '';
+  currentEditIndex = -1;
+  qs('#m_addRec').textContent = 'Salvar Receita';
+}
+
 // Função auxiliar para encontrar o índice de uma receita
 function getRecipeIndex(recipe) {
   return window.recipes.findIndex(r => 

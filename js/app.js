@@ -68,7 +68,7 @@ function setupEventListeners() {
   Object.entries(buttons).forEach(([selector, modulePath]) => {
     const button = qs(selector);
     if (button) {
-      button.addEventListener('click', () => {
+      button.addEventListener('click', function handleClick() {
         const action = selector === '#b-current' ? 'showCurrentPlan' : 
                       selector === '#b-create' ? 'showCreatePlan' : 
                       selector === '#b-rec' ? 'showRecipes' : 'showInventory';
