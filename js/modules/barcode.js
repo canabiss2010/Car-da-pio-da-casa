@@ -145,35 +145,33 @@ class BarcodeScanner {
   }
 
   // Inicia a câmera
-  async startCamera(videoElement) {
-    try {
-      // Pede permissão para usar a câmera
-      this.stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          facingMode: 'environment',  // Usa a câmera traseira
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        },
-        audio: false
-      });
-      
-      // Mostra o vídeo na tela
-      const scannerElement = qs('#barcodeScanner');
-      scannerElement.innerHTML = '';
-      scannerElement.appendChild(videoElement);
-      
-      // Inicia o vídeo
-      videoElement.srcObject = this.stream;
-      await videoElement.play();
-      
-      // Começa a ler códigos
+async startCamera(videoElement) {
+  try {
+    this.stream = await navigator.mediaDevices.getUserMedia({
+      video: { 
+        facingMode: 'environment',
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      }
+    });
+
+    const scannerElement = qs('#barcodeScanner');
+    scannerElement.innerHTML = '';
+    scannerElement.appendChild(videoElement);
+    videoElement.srcObject = this.stream;
+    await videoElement.play();
+    
+    // Aguarda um pouco antes de começar a escanear
+    setTimeout(() => {
       this.startScanning(videoElement);
-      
-    } catch (error) {
-      console.error('Erro ao acessar câmera:', error);
-      throw new Error('Não foi possível acessar a câmera. Verifique as permissões.');
-    }
+    }, 1000);
+    
+  } catch (error) {
+    console.error('Erro ao acessar câmera:', error);
+    this.updateScannerUI('Não foi possível acessar a câmera');
+    throw error;
   }
+}
 
   // Para a câmera
   async stopCamera() {
@@ -199,26 +197,56 @@ class BarcodeScanner {
   }
 
   // Inicia a leitura do código
-  async startScanning(videoElement) {
-    if (this.scanning) return;
-    this.scanning = true;
+async startScanning(videoElement) {
+  if (this.scanning) return;
+  this.scanning = true;
+  
+  try {
+    // Limpa resultados anteriores
+    const resultContainer = qs('#resultContainer', this.modal);
+    const barcodeResult = qs('#barcodeResult', this.modal);
+    if (resultContainer) resultContainer.style.display = 'none';
+    if (barcodeResult) barcodeResult.textContent = '';
+
+    console.log('Iniciando leitura...');
     
-    try {
-      // Tenta ler o código de barras
-      this.codeReader.decodeFromVideoElement(videoElement, (result, error) => {
+    // Configurações otimizadas
+    const hints = new Map();
+    hints.set(window.ZXing.DecodeHintType.TRY_HARDER, true);
+    hints.set(window.ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+      window.ZXing.BarcodeFormat.EAN_13,
+      window.ZXing.BarcodeFormat.EAN_8,
+      window.ZXing.BarcodeFormat.UPC_A,
+      window.ZXing.BarcodeFormat.CODE_128
+    ]);
+
+    // Inicia a leitura
+    await this.codeReader.decodeFromConstraints(
+      {
+        video: {
+          facingMode: 'environment',
+          width: { min: 640, ideal: 1280, max: 1920 },
+          height: { min: 480, ideal: 720, max: 1080 }
+        }
+      },
+      videoElement,
+      (result, error) => {
         if (result) {
-          // Se achou um código
+          console.log('Código detectado:', result.text);
           this.handleBarcode(result.text);
         }
-        if (error && !(error.name === 'NotFoundException')) {
-          console.error('Erro na leitura:', error);
+        if (error && !error.message.includes('Not Found')) {
+          console.warn('Erro na leitura:', error);
         }
-      });
-    } catch (error) {
-      console.error('Erro ao iniciar scanner:', error);
-      setAlert('Erro ao iniciar o scanner de código de barras', 'error');
-    }
+      }
+    );
+
+  } catch (error) {
+    console.error('Erro no scanner:', error);
+    setAlert('Erro ao iniciar o scanner', 'error');
+    this.scanning = false;
   }
+}
 
   // Para de ler códigos
   stopScanning() {
