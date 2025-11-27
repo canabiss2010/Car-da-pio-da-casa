@@ -186,6 +186,7 @@ class BarcodeScanner {
   async captureAndDecode() {
     const resultArea = document.getElementById('resultArea');
     const captureBtn = document.getElementById('captureBtn');
+    const overlay = document.getElementById('barcodeOverlay');
     const originalText = captureBtn.innerHTML;
     
     try {
@@ -193,6 +194,17 @@ class BarcodeScanner {
       captureBtn.disabled = true;
       captureBtn.innerHTML = '<span>Processando...</span> 🔄';
       resultArea.style.display = 'none';
+
+      // Mostra o loader
+      overlay.innerHTML = `
+        <div class="coffee" style="margin-bottom: 10px;">
+          <div></div>
+          <div></div>
+          <div></div>
+        </div>
+        <div>Processando código de barras...</div>
+      `;
+      overlay.style.display = 'flex';
 
       // Cria um canvas para capturar o frame
       const canvas = document.createElement('canvas');
@@ -224,7 +236,8 @@ class BarcodeScanner {
       resultArea.style.color = 'red';
       resultArea.style.display = 'block';
     } finally {
-      // Restaura o botão
+      // Esconde o loader e restaura o botão
+      overlay.style.display = 'none';
       captureBtn.disabled = false;
       captureBtn.innerHTML = originalText;
     }
@@ -233,10 +246,11 @@ class BarcodeScanner {
   // Decodifica o código de barras usando a biblioteca ZXing
   async decodeBarcode(canvas) {
     try {
-      // Verifica se o ZXing está disponível
-      if (!window.ZXing) {
-        throw new Error('Biblioteca de leitura não carregada');
-      }
+    // Verifica se o ZXing está disponível
+    if (!window.ZXing) {
+      // Tenta carregar o ZXing se não estiver disponível
+      await this.loadZXing();
+    }
 
       const zxing = await ZXing();
       const imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
@@ -250,11 +264,46 @@ class BarcodeScanner {
 
       return result?.text || null;
 
-    } catch (error) {
-      console.error('Erro ao decodificar:', error);
-      return null;
+  } catch (error) {
+    console.error('Erro ao decodificar:', error);
+    // Mostra uma mensagem mais amigável no overlay
+    const overlay = document.getElementById('barcodeOverlay');
+    if (overlay) {
+      overlay.innerHTML = `
+        <div style="text-align: center; color: white;">
+          <div>Erro ao carregar o leitor</div>
+          <button onclick="window.location.reload()" style="margin-top: 10px; padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer;">
+            Tentar novamente
+          </button>
+        </div>
+      `;
     }
+    return null;
   }
+}
+async loadZXing() {
+  return new Promise((resolve, reject) => {
+    if (window.ZXing) return resolve();
+    
+    const script = document.createElement('script');
+    script.src = './js/lib/zxing.min.js';
+    script.onload = () => {
+      // Dá um tempo para o script ser processado
+      setTimeout(() => {
+        if (window.ZXing) {
+          resolve();
+        } else {
+          reject(new Error('ZXing não foi carregado corretamente'));
+        }
+      }, 100);
+    };
+    script.onerror = () => {
+      console.error('Falha ao carregar o ZXing local');
+      reject(new Error('Não foi possível carregar o leitor de código de barras'));
+    };
+    document.body.appendChild(script);
+  });
+}
 
   // Para a câmera e limpa os recursos
   stopCamera() {
