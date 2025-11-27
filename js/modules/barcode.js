@@ -243,37 +243,81 @@ class BarcodeScanner {
     }
   }
 
-  // Decodifica o código de barras usando a biblioteca ZXing
-  async decodeBarcode(canvas) {
-    try {
-    // Verifica se o ZXing está disponível
+async decodeBarcode(canvas, attempt = 1, maxAttempts = 3) {
+  try {
+    // Tenta carregar o ZXing se não estiver disponível
     if (!window.ZXing) {
-      // Tenta carregar o ZXing se não estiver disponível
       await this.loadZXing();
+      await new Promise(resolve => setTimeout(resolve, 500)); // Aumentei o tempo de espera
     }
 
-      const zxing = await ZXing();
-      const imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+    if (typeof window.ZXing === 'undefined') {
+      throw new Error('ZXing não foi carregado corretamente');
+    }
+
+    // Cria uma cópia do canvas para manipulação
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+    
+    // Aplica um filtro de contraste melhorado
+    tempCtx.drawImage(canvas, 0, 0);
+    const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+    const data = imageData.data;
+    
+    // Aumenta o contraste
+    const contrast = 1.5; // Ajuste este valor conforme necessário
+    const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+    
+    for (let i = 0; i < data.length; i += 4) {
+      // Ajusta o contraste
+      data[i] = factor * (data[i] - 128) + 128;
+      data[i + 1] = factor * (data[i + 1] - 128) + 128;
+      data[i + 2] = factor * (data[i + 2] - 128) + 128;
       
-      // Configura o leitor
+      // Converte para escala de cinza
+      const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      data[i] = data[i + 1] = data[i + 2] = avg;
+    }
+    
+    tempCtx.putImageData(imageData, 0, 0);
+
+    // Tenta decodificar
+    try {
+      const zxing = window.ZXing.BrowserQRCodeReader ? window.ZXing : await window.ZXing();
       const reader = new zxing.BrowserQRCodeReader();
+      
+      // Usa o canvas temporário para a leitura
       const result = await reader.decodeFromImage(
         null,
-        canvas.toDataURL('image/png')
+        tempCanvas.toDataURL('image/png', 1.0) // Qualidade máxima
       );
-
-      return result?.text || null;
+      
+      if (result?.text) {
+        return result.text;
+      }
+      throw new Error('Nenhum código de barras encontrado');
+      
+    } catch (decodeError) {
+      // Se falhar e ainda tiver tentativas, tenta novamente
+      if (attempt < maxAttempts) {
+        console.log(`Tentativa ${attempt} falhou, tentando novamente...`);
+        await new Promise(resolve => setTimeout(resolve, 300)); // Aumentei o tempo entre tentativas
+        return this.decodeBarcode(canvas, attempt + 1, maxAttempts);
+      }
+      throw new Error('Não foi possível ler o código de barras. Tente aproximar mais o código da câmera e garantir boa iluminação.');
+    }
 
   } catch (error) {
     console.error('Erro ao decodificar:', error);
-    // Mostra uma mensagem mais amigável no overlay
     const overlay = document.getElementById('barcodeOverlay');
     if (overlay) {
       overlay.innerHTML = `
         <div style="text-align: center; color: white;">
-          <div>Erro ao carregar o leitor</div>
-          <button onclick="window.location.reload()" style="margin-top: 10px; padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer;">
-            Tentar novamente
+          <div>${error.message.includes('Nenhum código') ? 'Nenhum código de barras encontrado' : 'Erro ao processar o código'}</div>
+          <button onclick="window.location.reload()" style="margin-top: 10px; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; background: var(--accent); color: white; font-weight: bold;">
+            Tentar Novamente
           </button>
         </div>
       `;
@@ -281,6 +325,7 @@ class BarcodeScanner {
     return null;
   }
 }
+
 async loadZXing() {
   return new Promise((resolve, reject) => {
     if (window.ZXing) return resolve();
@@ -288,7 +333,6 @@ async loadZXing() {
     const script = document.createElement('script');
     script.src = './js/lib/zxing.min.js';
     script.onload = () => {
-      // Dá um tempo para o script ser processado
       setTimeout(() => {
         if (window.ZXing) {
           resolve();
