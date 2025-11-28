@@ -18,3 +18,10 @@ CODIGO DE BARRAS:
 Colocar alguma coisa visual q indique que a foto esta sendo analisada
 organizar a ordem de (pedir permissao da camera>abrir o modal>inicial a camera>tirar foto>parar camera>mostra que esta carregando>responder sobre a analise da foto )
 futuramente: com os dados da analise da foto, adicionar à dispensa como ingrediente ( tem q colocar a biblioteca com o banco de dados pelo codigo)
+
+HOJE: 
+
+arrumar o visual da dispensa
+montar/editar o visual pra ler o codigo (no modal dele)
+instalar o programa
+programar as funcoes 
