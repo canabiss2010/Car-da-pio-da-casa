@@ -1,0 +1,150 @@
+# 
+# Translators:
+# Žiga Bobnar, 2025
+# 
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2019-05-01T17:59:17+00:00\n"
+"PO-Revision-Date: 2020-08-31 19:11+0000\n"
+"Last-Translator: Žiga Bobnar, 2025\n"
+"Language-Team: Slovenian (https://app.transifex.com/grocy/teams/93189/sl/)\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: sl\n"
+"Plural-Forms: nplurals=4; plural=(n%100==1 ? 0 : n%100==2 ? 1 : n%100==3 || n%100==4 ? 2 : 3);\n"
+"X-Domain: grocy/locales\n"
+
+# Czech
+msgid "cs"
+msgstr "Češčina"
+
+# Danish
+msgid "da"
+msgstr "Danščina"
+
+# German
+msgid "de"
+msgstr "Nemščina"
+
+# Greek
+msgid "el_GR"
+msgstr "Grščina"
+
+# English
+msgid "en"
+msgstr "Angleščina"
+
+# English (Great Britain)
+msgid "en_GB"
+msgstr "Angleščina (Združeno Kraljestvo)"
+
+# Spanish
+msgid "es"
+msgstr "Španščina"
+
+# French
+msgid "fr"
+msgstr "Francoščina"
+
+# Hungarian
+msgid "hu"
+msgstr "Madžarščina"
+
+# Italian
+msgid "it"
+msgstr "Italijanščina"
+
+# Japanese
+msgid "ja"
+msgstr "Japonščina"
+
+# Korean
+msgid "ko_KR"
+msgstr "Korejščina"
+
+# Dutch
+msgid "nl"
+msgstr "Nizozemščina"
+
+# Norwegian
+msgid "no"
+msgstr "Norveščina"
+
+# Polish
+msgid "pl"
+msgstr "Poljščina"
+
+# Portuguese (Brazil)
+msgid "pt_BR"
+msgstr "Portugalščina (Brazilija)"
+
+# Portuguese (Portugal)
+msgid "pt_PT"
+msgstr "Portugalščina (Portugalska)"
+
+# Russian
+msgid "ru"
+msgstr "Ruščina"
+
+# Slovak
+msgid "sk_SK"
+msgstr "Slovaščina"
+
+# Slovenian
+msgid "sl"
+msgstr "Slovenščina"
+
+# Swedish
+msgid "sv_SE"
+msgstr "Švedščina"
+
+# Turkish
+msgid "tr"
+msgstr "Turščina"
+
+# Chinese (Taiwan)
+msgid "zh_TW"
+msgstr "Kitajščina (Tajvan)"
+
+# Chinese (China)
+msgid "zh_CN"
+msgstr "Kitajščina (Kitajska)"
+
+# Hebrew (Israel)
+msgid "he_IL"
+msgstr "Hebrejščina (Izrael)"
+
+# Tamil
+msgid "ta"
+msgstr "Tamilščina"
+
+# Finnish
+msgid "fi"
+msgstr "Finščina"
+
+# Catalan
+msgid "ca"
+msgstr "Katalonščina"
+
+# Lithuanian
+msgid "lt"
+msgstr "Litovščina"
+
+# Ukrainian
+msgid "uk"
+msgstr "Ukrajinščina"
+
+# Romanian
+msgid "ro_RO"
+msgstr "Romunščina"
+
+# Estonian
+msgid "et_EE"
+msgstr "Estonščina"
+
+# Bulgarian
+msgid "bg_BG"
+msgstr "Bulgarščina"

@@ -1,0 +1,435 @@
+# 
+# Translators:
+# Anže Pintar <anze.pintar2@gmail.com>, 2023
+# Žiga Bobnar, 2025
+# 
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2019-05-01T17:59:17+00:00\n"
+"PO-Revision-Date: 2019-05-01 17:42+0000\n"
+"Last-Translator: Žiga Bobnar, 2025\n"
+"Language-Team: Slovenian (https://app.transifex.com/grocy/teams/93189/sl/)\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: sl\n"
+"Plural-Forms: nplurals=4; plural=(n%100==1 ? 0 : n%100==2 ? 1 : n%100==3 || n%100==4 ? 2 : 3);\n"
+"X-Domain: grocy/demo_data\n"
+
+msgid "Cookies"
+msgstr "Piškoti"
+
+msgid "Chocolate"
+msgstr "Čokolada"
+
+msgid "Pantry"
+msgstr "Shramba"
+
+msgid "Candy cupboard"
+msgstr "Omara za sladkarije"
+
+msgid "Tinned food cupboard"
+msgstr "Omara za konzervirano hrano"
+
+msgid "Fridge"
+msgstr "Hladilnik"
+
+msgid "Piece"
+msgid_plural "Pieces"
+msgstr[0] "Kos"
+msgstr[1] "Kosa"
+msgstr[2] "Kosi"
+msgstr[3] "Kosov"
+
+msgid "Pack"
+msgid_plural "Packs"
+msgstr[0] "Paket"
+msgstr[1] "Paketa"
+msgstr[2] "Paketi"
+msgstr[3] "Paketov"
+
+msgid "Glass"
+msgid_plural "Glasses"
+msgstr[0] "Kozarec"
+msgstr[1] "Kozarca"
+msgstr[2] "Kozarci"
+msgstr[3] "Kozarcev"
+
+msgid "Tin"
+msgid_plural "Tins"
+msgstr[0] "Pločevinka"
+msgstr[1] "Pločevinki"
+msgstr[2] "Pločevinke"
+msgstr[3] "Pločevink"
+
+msgid "Can"
+msgid_plural "Cans"
+msgstr[0] "Konzerva"
+msgstr[1] "Konzervi"
+msgstr[2] "Konverve"
+msgstr[3] "Konzerv"
+
+msgid "Bunch"
+msgid_plural "Bunches"
+msgstr[0] "Grozd"
+msgstr[1] "Grozda"
+msgstr[2] "Grozdi"
+msgstr[3] "Grozdov"
+
+msgid "Gummy bears"
+msgstr "Gumijasti bonboni"
+
+msgid "Crisps"
+msgstr "Čips"
+
+msgid "Eggs"
+msgstr "Jajca"
+
+msgid "Noodles"
+msgstr "Rezanci"
+
+msgid "Pickles"
+msgstr "Kumarice"
+
+msgid "Gulash soup"
+msgstr "Golaž"
+
+msgid "Yogurt"
+msgstr "Jogurt"
+
+msgid "Cheese"
+msgstr "Sir"
+
+msgid "Cold cuts"
+msgstr "Narezki"
+
+msgid "Paprika"
+msgstr "Paprika"
+
+msgid "Cucumber"
+msgstr "Kumara"
+
+msgid "Radish"
+msgstr "Redkev"
+
+msgid "Tomato"
+msgstr "Paradižnik"
+
+msgid "Change towels in the bathroom"
+msgstr "Zamenjaj brisače v kopalnici"
+
+msgid "Mop the kitchen floor"
+msgstr "Obrisati kuhinjska tla"
+
+msgid "Warranty ends"
+msgstr "Garancija poteče"
+
+msgid "TV remote control"
+msgstr "TV daljinec"
+
+msgid "Alarm clock"
+msgstr "Budilka"
+
+msgid "Heat remote control"
+msgstr "Daljinski termostat"
+
+msgid "Take out the trash"
+msgstr "Izprazni smeti"
+
+msgid "Some good snacks"
+msgstr "Nekaj dobrih prigrizkov"
+
+msgid "Pizza dough"
+msgstr "Testo za pico"
+
+msgid "Sieved tomatoes"
+msgstr "Pasirani paradižniki"
+
+msgid "Salami"
+msgstr "Salama"
+
+msgid "Toast"
+msgstr "Toast"
+
+msgid "Minced meat"
+msgstr "Mleto meso"
+
+msgid "Pizza"
+msgstr "Pica"
+
+msgid "Spaghetti bolognese"
+msgstr "Špageti Bolognese"
+
+msgid "Sandwiches"
+msgstr "Sendviči"
+
+msgid "English"
+msgstr "Angleščina"
+
+msgid "German"
+msgstr "Nemščina"
+
+msgid "Italian"
+msgstr "Italjanščina"
+
+msgid "This is the note content of the recipe ingredient"
+msgstr "To je vsebina opombe v sestavini recepta"
+
+msgid "Demo User"
+msgstr "Demo uporabnik"
+
+msgid "Gram"
+msgid_plural "Grams"
+msgstr[0] "Gram"
+msgstr[1] "Grama"
+msgstr[2] "Grami"
+msgstr[3] "Gramov"
+
+msgid "Flour"
+msgstr "Moka"
+
+msgid "Pancakes"
+msgstr "Palačinke"
+
+msgid "Sugar"
+msgstr "Sladkor"
+
+msgid "Sweets"
+msgstr "Sladkarije"
+
+msgid "Bakery products"
+msgstr "Pekovski izdelki"
+
+msgid "Tinned food"
+msgstr "Konzervirana hrana"
+
+msgid "Butchery products"
+msgstr "Mesni izdelki"
+
+msgid "Vegetables/Fruits"
+msgstr "Zelenjava/sadje"
+
+msgid "Refrigerated products"
+msgstr "Hlajeni izdelki"
+
+msgid "Coffee machine"
+msgstr "Kavni avtomat"
+
+msgid "Dishwasher"
+msgstr "Pomivalni stroj"
+
+msgid "Liter"
+msgstr "Liter"
+
+msgid "Liters"
+msgstr "Litrov"
+
+msgid "Bottle"
+msgstr "Steklenica"
+
+msgid "Bottles"
+msgstr "Steklenic"
+
+msgid "Milk"
+msgstr "Mleko"
+
+msgid "Chocolate sauce"
+msgstr "Čokoladna omaka"
+
+msgid "Milliliters"
+msgstr "Mililitrov"
+
+msgid "Milliliter"
+msgstr "Mililiter"
+
+msgid "Bottom"
+msgstr "Spodnja plast"
+
+msgid "Topping"
+msgstr "Preliv"
+
+msgid "French"
+msgstr "Francoščina"
+
+msgid "Turkish"
+msgstr "Turščina"
+
+msgid "Spanish"
+msgstr "Španščina"
+
+msgid "Russian"
+msgstr "Ruščina"
+
+msgid "Vacuum the living room floor"
+msgstr "Posesaj tla dnevne sobe"
+
+msgid "Clean the litter box"
+msgstr "Očisti mačje stranišče"
+
+msgid "Change the bed sheets"
+msgstr "Zamenjaj posteljnino"
+
+msgid "Swedish"
+msgstr "Švedščina"
+
+msgid "Polish"
+msgstr "Poljščina"
+
+msgid "Milk Chocolate"
+msgstr "Mlečna čokolada"
+
+msgid "Dark Chocolate"
+msgstr "Temna čokolada"
+
+msgid "Slice"
+msgid_plural "Slices"
+msgstr[0] "Rezina"
+msgstr[1] "Rezini"
+msgstr[2] "Rezine"
+msgstr[3] "Rezin"
+
+msgid "Example userentity"
+msgstr "Primer uporabniške entitete"
+
+msgid "This is an example user entity..."
+msgstr "To je primer uporabniške entitete..."
+
+msgid "Custom field"
+msgstr "Polje po meri"
+
+msgid "Example field value..."
+msgstr "Primer vrednosti polja..."
+
+msgid "Waffle rolls"
+msgstr "Vafelj rolice"
+
+msgid "Danish"
+msgstr "Danščine"
+
+msgid "Dutch"
+msgstr "Nizozemščina"
+
+msgid "Norwegian"
+msgstr "Norveščina"
+
+msgid "Demo"
+msgstr "Demo"
+
+msgid "Stable version"
+msgstr "Stabilna verzija"
+
+msgid "Preview version"
+msgstr "Prejšnja verzija"
+
+msgid "current release"
+msgstr "trenutna verzija"
+
+msgid "not yet released"
+msgstr "še ni objavljeno"
+
+msgid "Portuguese (Brazil)"
+msgstr "Portugalščina (Brazilija)"
+
+msgid "This is a note"
+msgstr "To je opomba"
+
+msgid "Freezer"
+msgstr "Zamrzovalnik"
+
+msgid "Hungarian"
+msgstr "Madžarščina"
+
+msgid "Slovak"
+msgstr "Slovaščina"
+
+msgid "Czech"
+msgstr "Češčina"
+
+msgid "Portuguese (Portugal)"
+msgstr "Portugalščina (Portugalska)"
+
+# Use a in your country well known supermarket name
+msgid "DemoSupermarket1"
+msgstr "DemoTrgovina1"
+
+# Use a in your country well known supermarket name
+msgid "DemoSupermarket2"
+msgstr "DemoTrgovina2"
+
+msgid "Japanese"
+msgstr "Japonščina"
+
+msgid "Chinese (Taiwan)"
+msgstr "Kitajščina (Tajvan)"
+
+msgid "Greek"
+msgstr "Grščina"
+
+msgid "Korean"
+msgstr "Korejščina"
+
+msgid "Chinese (China)"
+msgstr "Kitajščina (Kitajska)"
+
+msgid "Hebrew (Israel)"
+msgstr "Hebrejščina (Izrael)"
+
+msgid "Tamil"
+msgstr "Tamilščina"
+
+msgid "Finnish"
+msgstr "Finščina"
+
+msgid "Breakfast"
+msgstr "Zajtrk"
+
+msgid "Lunch"
+msgstr "Kosilo"
+
+msgid "Dinner"
+msgstr "Večerja"
+
+msgid "Catalan"
+msgstr "Katalonščina"
+
+msgid "Slovenian"
+msgstr "Slovenščina"
+
+msgid "Lithuanian"
+msgstr "Litovščina"
+
+msgid "Ukrainian"
+msgstr "Ukrajinščina"
+
+msgid "Kilogram"
+msgid_plural "Kilograms"
+msgstr[0] "Kilogram"
+msgstr[1] "Kilograma"
+msgstr[2] "Kilogrami"
+msgstr[3] "Kilogramov"
+
+msgid "Romanian"
+msgstr "Romunščina"
+
+msgid "Pint"
+msgstr "Pinta"
+
+msgid "Beverages"
+msgstr "Pijače"
+
+msgid "Ice Cream"
+msgstr "Sladoled"
+
+msgid "Soda"
+msgstr "Soda"
+
+msgid "Beer"
+msgstr "Pivo"
+
+msgid "Estonian"
+msgstr "Estonščina"
+
+msgid "Bulgarian"
+msgstr "Bulgarščina"
