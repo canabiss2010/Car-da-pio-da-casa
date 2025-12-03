@@ -37,7 +37,11 @@ class BarcodeScanner {
   handleBarcodeScanned(code) {
     this.lastScannedCode = code;
     const product = this.findProductByBarcode(code);
-    this.showProductInfo(product);
+    if (product) {
+      this.addToInventory(product);  // Produto encontrado: adiciona direto ao estoque
+    } else {
+    this.showProductInfo();  // Produto não encontrado: mostra formulário
+    }
   }
 
   // Encontra um produto pelo código de barras
@@ -132,52 +136,115 @@ class BarcodeScanner {
     }
   }
 
-  addToInventory(product) {
-    if (!window.inventory) window.inventory = [];
-    
-    // Busca o produto original (sem afetar o estoque)
-    const originalProduct = this.findProductByBarcode(product.barcode) || product;
-    const packageQty = parseFloat(originalProduct.qty);
+showProductForm() {
+  const formHtml = `
+    <div id="productInfo" style="margin-top: 20px;">
+      <div style="padding: 8px; background: #ffebee; color: #d32f2f; 
+                 border-radius: 4px; margin-bottom: 16px; font-size: 14px;">
+        ❌ Produto não cadastrado
+      </div>
+      <div style="margin-bottom: 16px;">
+        <div style="font-weight: 500; margin-bottom: 12px; color: #333;">Cadastre seu produto</div>
+        <div style="margin-bottom: 12px;">
+          <input type="text" 
+                 id="newProductName" 
+                 placeholder="Nome do produto" 
+                 style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <input type="number" 
+                 id="newProductQty" 
+                 placeholder="Quantidade" 
+                 min="0.01" 
+                 step="0.01"
+                 style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+          <select id="newProductUnit" 
+                 style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; background: white;">
+            <option value="un">un</option>
+            <option value="g">g</option>
+            <option value="kg">kg</option>
+            <option value="ml">ml</option>
+            <option value="L">L</option>
+          </select>
+        </div>
+        <button id="saveProductBtn" 
+                style="margin-top: 12px; width: 100%; padding: 10px; 
+                       background: #4caf50; color: white; border: none; 
+                       border-radius: 4px; cursor: pointer;">
+          Salvar Produto
+        </button>
+      </div>
+    </div>
+  `;
 
-    // Encontra o item no inventário
-    const existingItem = window.inventory.find(item => 
-      item.barcode === product.barcode
-    );
-
-    if (existingItem) {
-      // Soma a quantidade da embalagem ao estoque existente
-      const currentQty = parseFloat(existingItem.qty) || 0;
-      existingItem.qty = (currentQty + packageQty).toString();
-      setAlert(`Adicionado ${packageQty} ${product.unit} à dispensa!`, 'success');
-    } else {
-      // Se não existe, adiciona o produto com a quantidade da embalagem
-      const newItem = {
-        ...originalProduct,
-        qty: packageQty.toString(),
-        originalName: originalProduct.originalName || originalProduct.name,
-        normalizedName: (originalProduct.normalizedName || originalProduct.name)
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-      };
-      window.inventory.push(newItem);
-      setAlert('Produto adicionado à dispensa!', 'success');
-    }
-
-    if (window.saveAll) {
-      window.saveAll();
-      window.renderList?.();
-    }
-
-    // Limpa e reinicia
-    const infoDiv = qs('#productInfo');
-    if (infoDiv) infoDiv.outerHTML = '';
-    
-    const input = qs('#barcodeInput');
-    if (input) input.value = '';
-
-    this.openScanner();
+  const infoDiv = qs('#productInfo') || qs('.scanner-actions')?.nextElementSibling;
+  if (infoDiv) {
+    infoDiv.outerHTML = formHtml;
+    qs('#saveProductBtn')?.addEventListener('click', () => this.saveNewProduct());
   }
+}
+
+addToInventory(product) {
+  if (!window.inventory) window.inventory = [];
+  
+  // Busca o produto original (sem afetar o estoque)
+  const originalProduct = this.findProductByBarcode(product.barcode) || product;
+  const packageQty = parseFloat(originalProduct.qty);
+
+  // Encontra o item no inventário
+  const existingItem = window.inventory.find(item => 
+    item.barcode === product.barcode
+  );
+
+  if (existingItem) {
+    // Soma a quantidade da embalagem ao estoque existente
+    const currentQty = parseFloat(existingItem.qty) || 0;
+    existingItem.qty = (currentQty + packageQty).toString();
+  } else {
+    // Se não existe, adiciona o produto com a quantidade da embalagem
+    const newItem = {
+      ...originalProduct,
+      qty: packageQty.toString(),
+      originalName: originalProduct.originalName || originalProduct.name,
+      normalizedName: (originalProduct.normalizedName || originalProduct.name)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+    };
+    window.inventory.push(newItem);
+  }
+
+  // Mostra mensagem de sucesso
+  const successHtml = `
+    <div id="productInfo" style="margin-top: 20px;">
+      <div style="padding: 8px; background: #e8f5e9; color: #2e7d32; 
+                 border-radius: 4px; margin-bottom: 16px; font-size: 14px;">
+        ✅ ${product.name} ${packageQty}${product.unit} adicionado com sucesso
+      </div>
+    </div>
+  `;
+
+  const infoDiv = qs('#productInfo');
+  if (infoDiv) {
+    infoDiv.outerHTML = successHtml;
+  } else {
+    const actionsDiv = qs('.scanner-actions');
+    if (actionsDiv) {
+      actionsDiv.insertAdjacentHTML('afterend', successHtml);
+    }
+  }
+
+  // Limpa o campo de input
+  const input = qs('#barcodeInput');
+  if (input) {
+    input.value = '';
+    input.focus();
+  }
+
+  // Atualiza os dados
+  if (window.saveAll) window.saveAll();
+  if (window.renderList) window.renderList();
+}
 
   saveNewProduct() {
     const name = qs('#newProductName')?.value.trim();
