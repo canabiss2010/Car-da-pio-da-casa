@@ -26,19 +26,7 @@ export function showInventory() {
   // Configura o evento do botão de código de barras
   const barcodeBtn = qs('#startBarcode');
   if (barcodeBtn) {
-    const handleBarcodeClick = async () => {
-      try {
-        await barcodeScanner.ready;
-        barcodeScanner.open();
-      } catch (error) {
-        console.error('Erro:', error);
-        setAlert('Não foi possível abrir o leitor de códigos', 'error');
-      }
-    };
-    
-    // Remove o listener antigo e adiciona um novo
-    barcodeBtn.removeEventListener('click', handleBarcodeClick);
-    barcodeBtn.addEventListener('click', handleBarcodeClick);
+    barcodeBtn.addEventListener('click', () => barcodeScanner.openScanner());
   }
 }
 
