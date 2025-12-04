@@ -3,14 +3,12 @@ CONECTAR A CONTA DE TODO MUNDO EM CASA
 getUsers(): Lista usuários do sistema
 getCurrentUser(): Informações do usuário atual
 
-
 LISTA DE COMPRAS
 getShoppingList(): Mostra itens na lista de compras
 addToShoppingList(productId, amount = 1): Adiciona item à lista
 removeFromShoppingList(productId): Remove item da lista
 clearShoppingList(): Limpa a lista de compras
 addMissingToShoppingList(): Adiciona itens em falta automaticamente
-
 
 BLOCO DA DISPENSA
 HOJE
