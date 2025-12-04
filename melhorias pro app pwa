@@ -1,25 +1,10 @@
-melhorias pro app pwa
 
-0,5- adiconar/destacar qual dia tem q cozinhar a receita e ter uma funcao/botao pra escolher que só cozinhara para o almoco, de forma q dure pra janta tambem 
-8- tem q explicar oq significa a sujestão em laranja 
-9- os avisos somem depois de um tempo
-2- checar todas as funcionalidades, se ta adicionando corretamente
-10- colocar um corretor ortografico 
-11- ter a possibilidade de uma receitas estar em 2 categorias
-12- Observações importantes:
-Não há validação de unidades de medida
-Não há conversão automática entre unidades
-O sistema não verifica se a unidade existe ou faz sentido
-13- fazer uma lista de compras automaticamente 
-14- melhorar o visual, com cores, subtitulos e deixar tudo padrão
-
-
-
-
+CONECTAR A CONTA DE TODO MUNDO EM CASA
 getUsers(): Lista usuários do sistema
 getCurrentUser(): Informações do usuário atual
 
-Lista de Compras
+
+LISTA DE COMPRAS
 getShoppingList(): Mostra itens na lista de compras
 addToShoppingList(productId, amount = 1): Adiciona item à lista
 removeFromShoppingList(productId): Remove item da lista
@@ -27,67 +12,53 @@ clearShoppingList(): Limpa a lista de compras
 addMissingToShoppingList(): Adiciona itens em falta automaticamente
 
 
-
-
-
-1. Gerenciamento de Produtos
-getProducts(): Lista todos os produtos cadastrados
+BLOCO DA DISPENSA
+HOJE
+1- adicionar um modal pra pessao confirmar se quer deletar o produto
+2- um botao de 3 pontinho no bloco de cada ingrediente que abre uma mini listinha das informacoes dele ( codigo de barras e sua qauntidade)
+3- ter uma categoria pra cada ingrediente (q nem nas receitas)
+4- trocar a ordem (ler codigo de barras primeiro / adicionar manualmente embaixo) 
+. Gerenciamento de Produtos
 getProduct(id): Busca um produto específico pelo ID
-searchProducts(query): Busca produtos por nome ou código de barras
-addProduct(productData): Adiciona um novo produto
+searchProducts(query): Busca produtos por nome
 updateProduct(id, updateData): Atualiza um produto existente
-getProductStock(id): Mostra o estoque atual de um produto
-getProductPriceHistory(id): Histórico de preços de um produto
-
-2. Estoque
+. Estoque
 getInventory(): Lista todos os itens em estoque
 addToStock(productId, amount, bestBeforeDate, price): Adiciona itens ao estoque
 consumeProduct(productId, amount, spoiled = false): Consome itens do estoque
 inventoryProduct(productId, newAmount): Ajusta manualmente o estoque
 getStockEntries(): Mostra todas as entradas de estoque
-getStockLocations(): Lista os locais de armazenamento
+. Produtos
+getProductGroups(): Categorias de produtos
 
-3. Receitas
+BLOCO DAS RECEITAS
 getRecipes(): Lista todas as receitas
 getRecipe(id): Busca uma receita específica
 getRecipePositions(recipeId): Ingredientes de uma receita
 getRecipeFulfillment(recipeId): Verifica se pode fazer uma receita com o estoque atual
 consumeRecipe(recipeId, servings = 1): Consome os ingredientes da receita do estoque
+- ter a possibilidade de uma receitas estar em 2 categorias
 
-4. Lista de Compras
-getShoppingList(): Mostra itens na lista de compras
-addToShoppingList(productId, amount = 1): Adiciona item à lista
-removeFromShoppingList(productId): Remove item da lista
-clearShoppingList(): Limpa a lista de compras
-addMissingToShoppingList(): Adiciona itens em falta automaticamente
-
-5. Planejamento de Refeições
+BLOCO DE CRIAR PLANO/PLANO ATUAL
 getMealPlan(): Mostra o planejamento de refeições
 addToMealPlan(day, recipeId, servings): Adiciona uma refeição ao plano
 getMealPlanWeek(date): Pega o plano da semana de uma data específica
 generateShoppingListFromMealPlan(): Gera lista de compras baseada no planejamento
+- adiconar/destacar qual dia tem q cozinhar a receita e ter uma funcao/botao pra escolher que só cozinhara para o almoco, de forma q dure pra janta tambem 
+- tem q explicar oq significa a sujestão em laranja 
 
 
-8. Unidades de Medida
+ADICIONAIS
+- Ter valores padroes pra unidades de medida
 getQuantityUnits(): Lista unidades de medida (kg, g, ml, etc)
 getQuantityUnitConversions(): Mostra conversões entre unidades
-
-9. Produtos
-getProductGroups(): Categorias de produtos
-getProductBarcodes(): Códigos de barras dos produtos
-
-10. Usuários
-getUsers(): Lista usuários do sistema
-getCurrentUser(): Informações do usuário atual
+- os avisos somem depois de um tempo
+- colocar um corretor ortografico
+- melhorar o visual, com cores, subtitulos e deixar tudo padrão (ULTIMA COISA)
 
 
 
 
 
-MINHAS IDEIAS:
 
-1- adicionar um modal pra pessao confirmar se quer deletar o produto
-2- um botao de 3 pontinho no bloco de cada ingrediente que abre uma mini listinha das informacoes dele ( codigo de barras e sua qauntidade)
-3- ter uma categoria pra cada ingrediente (q nem nas receitas)
-4- trocar a ordem (ler codigo de barras primeiro / adicionar manualmente embaixo) 
-5- 
+
