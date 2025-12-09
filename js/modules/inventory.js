@@ -10,27 +10,46 @@ export function showInventory() {
       <span>Ler Código de Barras</span>
     </button>
 
-    <label style="font-size: 1.1em;">Adicione manualmente <span style="font-size: 0.9em;">(um por linha, separado por vírgula)</span></label>
-    <textarea id="m_invBulk" rows="6" placeholder="arroz,2,kg\nleite,2,l"></textarea>
+    <label style="font-size: 1.1em; display: block; margin-bottom: 8px;">Adicionar manualmente</label>
+    <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
+      <input type="text" id="m_itemName" placeholder="Nome do item" style="flex: 2; min-width: 150px; padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0;">
+      <input type="number" id="m_itemQty" placeholder="Qtd" style="flex: 1; min-width: 60px; padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0; text-align: center;">
+      <input type="text" id="m_itemUnit" placeholder="Un" style="flex: 1; min-width: 50px; padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0; text-align: center;">
+      <select id="m_itemCategory" style="flex: 3; min-width: 200px; padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0; background-color: white;">
+        <option value="">Selecione a categoria</option>
+        <option value="hortifruti">Hortifrúti</option>
+        <option value="carnes">Carnes, Aves e Ovo</option>
+        <option value="laticinios">Laticínios e Frios</option>
+        <option value="graos">Grãos e Cereais</option>
+        <option value="padaria">Padaria e Matinais</option>
+        <option value="bebidas">Bebidas</option>
+        <option value="enlatados">Enlatados e Conservas</option>
+        <option value="oleaginosas">Oleaginosas e Sementes</option>
+        <option value="temperos">Temperos e especiarias</option>
+        <option value="oleos">Óleos e Gorduras</option>
+        <option value="acucares">Açúcares e Ingredientes de Forno</option>
+        <option value="molhos">Molhos, Condimentos e Vinagres</option>
+        <option value="lanches">Lanches e Petiscos</option>
+      </select>
+    </div>
 
     <div style="display:flex;gap:8px;margin-top:8px">
       <button id="m_paste" class="btn">Adicionar itens</button>
       <button id="m_clearInv" class="btn-ghost">Limpar</button>
     </div>
 
-    <div style="position: relative; margin: 16px 0;">
-      <div style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%);">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z" stroke="#9E9E9E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M21 21L16.65 16.65" stroke="#9E9E9E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-      <input type="text" placeholder="Pesquisar itens..." style="width: 100%; padding: 10px 46px 10px 48px; border-radius: 20px; border: 1px solid #e0e0e0; font-size: 1em; background-color: #f8f9fa; outline: none; height: 44px; box-sizing: border-box; color: #333; font-weight: 400;">
-      <div style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%);">
-        <img src="icons/filtro.png" alt="Filtro" style="width: 24px; height: 24px; object-fit: contain;">
-      </div>
+  <div style="position: relative; margin: 16px 0;">
+    <div style="position: absolute; left: 16px; top: 55%; transform: translateY(-50%); display: flex; align-items: center; height: 20px; pointer-events: none;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="position: relative; top: 2px;">
+        <path d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z" stroke="#9E9E9E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M21 21L16.65 16.65" stroke="#9E9E9E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
     </div>
-
+    <input type="text" placeholder="Pesquisar itens..." style="width: 100%; padding: 12px 46px 12px 48px; border-radius: 20px; border: 1px solid #e0e0e0; font-size: 1em; background-color: #f8f9fa; outline: none; height: 44px; box-sizing: border-box; color: #333; font-weight: 400; line-height: 1.5;">
+    <div style="position: absolute; right: 16px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; height: 20px; cursor: pointer; pointer-events: none;">
+      <img src="icons/filtro.png" alt="Filtro" style="width: 20px; height: 20px; object-fit: contain; opacity: 0.7; position: relative; top: 2px;">
+    </div>
+  </div>
     <div id="m_invList" class="list" style="margin-top:12px"></div>
   `;
   
