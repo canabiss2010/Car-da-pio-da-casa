@@ -19,22 +19,23 @@ export function showRecipes() {
       </div>
       <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
         <select id="m_recFrequency" style="flex:1;min-width:120px">
+          <option value="" selected disabled>Frequência</option>
           <option value="1">Muito Raro</option>
           <option value="2">Raro</option>
-          <option value="3" selected>Moderado</option>
+          <option value="3">Moderado</option>
           <option value="4">Frequente</option>
           <option value="5">Muito Frequente</option>
         </select>
         <select id="m_recCategory" style="min-width:140px">
+          <option value="" selected disabled>Categoria</option>
           <option value="proteina">Proteínas</option>
           <option value="carboidrato">Carboidratos</option>
-          <option value="vegetais" selected>Vegetais</option>
+          <option value="vegetais">Vegetais</option>
           <option value="outros">Outros</option>
         </select>
         <div style="display:flex;align-items:center;gap:4px;margin:0 8px">
-          <span>Dura</span>
-          <input id="m_recDays" type="number" min="1" value="2" style="width:50px;text-align:center" />
-          <span> dias</span>
+          <span>Porções:</span>
+          <input id="m_recServings" type="number" min="1" value="4" style="width:50px;text-align:center" />
         </div>  
       </div>
       <label>Ingredientes (um por linha: nome,quantidade,unidade)</label>
@@ -113,7 +114,7 @@ function renderRecipeList() {
             <strong>${recipe.name}</strong>
           </div>
           <div class="small" style="margin-top:4px">
-            Dura ${recipe.days} dias •   ${freqInfo.label}
+            ${recipe.servings || 4} porções • ${freqInfo.label}
           </div>
           <div style="display:flex;gap:8px;margin-top:8px">
             <button data-idx="${getRecipeIndex(recipe)}" data-action="edit" class="btn-ghost">
@@ -157,7 +158,7 @@ function clearRecipeForm() {
   qs('#m_recName').value = '';
   qs('#m_recFrequency').value = '3';
   qs('#m_recCategory').value = 'vegetais';
-  qs('#m_recDays').value = '2';
+  qs('#m_recServings').value = '4';
   qs('#m_recIngredients').value = '';
   currentEditIndex = -1;
   qs('#m_addRec').textContent = 'Salvar Receita';
@@ -176,15 +177,13 @@ function loadRecipeForEdit(idx) {
   if (!recipe) return;
   
   const nameInput = qs('#m_recName');
-  const servesInput = qs('#m_recServes');
-  const daysInput = qs('#m_recDays');
+  const servingsInput = qs('#m_recServings');
   const categorySelect = qs('#m_recCategory');
   const frequencySelect = qs('#m_recFrequency');
   const ingredientsTextarea = qs('#m_recIngredients');
   
   if (nameInput) nameInput.value = recipe.name || '';
-  if (servesInput) servesInput.value = recipe.serves || 1;
-  if (daysInput) daysInput.value = recipe.days || 2;
+  if (servingsInput) servingsInput.value = recipe.servings || 4;
   if (categorySelect) categorySelect.value = recipe.category || 'verdura';
   if (frequencySelect) frequencySelect.value = recipe.frequency || 3;
   
@@ -215,7 +214,7 @@ document.addEventListener('click', (e) => {
   if (e.target.id === 'm_addRec') {
     const name = qs('#m_recName').value.trim().toLowerCase().replace(/^\w/, c => c.toUpperCase());
     const frequency = parseInt(qs('#m_recFrequency').value) || 3;
-    const days = Math.max(1, parseInt(qs('#m_recDays').value) || 2);
+    const servings = Math.max(1, parseInt(qs('#m_recServings').value) || 4);
     
     const ingredientsText = qs('#m_recIngredients').value.trim();
     const ingredients = ingredientsText
@@ -238,8 +237,8 @@ document.addEventListener('click', (e) => {
     const category = qs('#m_recCategory').value || 'outros';
     const recipe = { 
       name, 
-      frequency,  // Usando frequency ao invés de priority
-      days,
+      frequency,  
+      servings,
       category,
       ingredients 
     };
