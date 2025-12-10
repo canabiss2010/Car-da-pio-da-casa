@@ -6,15 +6,28 @@ import { barcodeScanner } from './barcode.js';
 
 export function showInventory() {
   const html = `
-    <button id="startBarcode" class="btn" style="width: 100%; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+
+    <button id="startBarcode" class="btn" style="width: 100%; margin-bottom: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 10px; font-size: 0.95em; font-weight: 500; height: 44px; box-sizing: border-box;">
+      <span style="font-size: 1.2em; line-height: 1;">📷</span>
       <span>Ler Código de Barras</span>
     </button>
 
-    <label style="font-size: 1.1em; display: block; margin-bottom: 8px;">Adicionar manualmente</label>
+    <label style="font-size: 1.1em; display: block; margin-bottom: 8px;">Adicione manualmente</label>
     <div style="display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
       <input type="text" id="m_itemName" placeholder="Nome do item" style="flex: 2; min-width: 150px; padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0;">
-      <input type="number" id="m_itemQty" placeholder="Qtd" style="flex: 1; min-width: 60px; padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0; text-align: center;">
-      <input type="text" id="m_itemUnit" placeholder="Un" style="flex: 1; min-width: 50px; padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0; text-align: center;">
+      <input 
+        type="number" 
+        id="m_itemQty" 
+        placeholder="Qtd" 
+        inputmode="decimal"
+        style="flex: 1; min-width: 60px; padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0; text-align: center; -moz-appearance: textfield;-webkit-appearance: textfield; appearance: textfield;">
+      <select id="m_itemUnit" style="flex: 1; min-width: 80px; padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0; text-align: center; background-color: white;">
+        <option value="Litro">Litro</option>
+        <option value="Kg">Kg</option>
+        <option value="Grama">Grama</option>
+        <option value="Ml">Ml</option>
+        <option value="Unidade" selected>Unidade</option>
+      </select>
       <select id="m_itemCategory" style="flex: 3; min-width: 200px; padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0; background-color: white;">
         <option value="">Selecione a categoria</option>
         <option value="hortifruti">Hortifrúti</option>
@@ -34,8 +47,7 @@ export function showInventory() {
     </div>
 
     <div style="display:flex;gap:8px;margin-top:8px">
-      <button id="m_paste" class="btn">Adicionar itens</button>
-      <button id="m_clearInv" class="btn-ghost">Limpar</button>
+      <button id="m_paste" class="btn">Adicionar item</button>
     </div>
 
   <div style="position: relative; margin: 16px 0;">
@@ -43,7 +55,7 @@ export function showInventory() {
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="position: relative; top: 2px;">
         <path d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z" stroke="#9E9E9E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
         <path d="M21 21L16.65 16.65" stroke="#9E9E9E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
+      </svg> 
     </div>
     <input type="text" placeholder="Pesquisar itens..." style="width: 100%; padding: 12px 46px 12px 48px; border-radius: 20px; border: 1px solid #e0e0e0; font-size: 1em; background-color: #f8f9fa; outline: none; height: 44px; box-sizing: border-box; color: #333; font-weight: 400; line-height: 1.5;">
     <div style="position: absolute; right: 16px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; height: 20px; cursor: pointer; pointer-events: none;">
@@ -70,6 +82,8 @@ function normalizeText(text) {
 
 function renderList() {
   const el = qs('#m_invList'); 
+  if (!el) return;
+  
   el.innerHTML = '';
   
   if (window.inventory.length === 0) {
@@ -77,53 +91,98 @@ function renderList() {
     return;
   }
   
-  // Agrupa itens por nome (normalizado) e unidade
-  const groupedItems = window.inventory.reduce((acc, item) => {
-    const normalizedItem = {
-      ...item,
-      originalName: item.name, // Mantém o nome original para exibição
-      normalizedName: normalizeText(item.name) // Nome normalizado para agrupamento
-    };
-    
-    const key = `${normalizedItem.normalizedName}_${item.unit}`;
-    
-    if (!acc[key]) {
-      acc[key] = { ...normalizedItem };
-    } else {
-      acc[key].qty += normalizedItem.qty;
-      // Mantém o nome com a primeira letra maiúscula se existir
-      if (normalizedItem.originalName[0] === normalizedItem.originalName[0].toUpperCase()) {
-        acc[key].name = normalizedItem.originalName;
-        acc[key].originalName = normalizedItem.originalName;
-      }
+  // Agrupa itens por categoria
+  const itemsByCategory = window.inventory.reduce((acc, item) => {
+    const category = item.category || 'outros';
+    if (!acc[category]) {
+      acc[category] = [];
     }
+    
+    // Verifica se já existe um item com o mesmo nome e unidade
+    const existingItemIndex = acc[category].findIndex(i => 
+      normalizeText(i.name) === normalizeText(item.name) && i.unit === item.unit
+    );
+    
+    if (existingItemIndex >= 0) {
+      // Se existir, soma as quantidades
+      acc[category][existingItemIndex].qty += item.qty;
+    } else {
+      // Se não existir, adiciona o item
+      acc[category].push({
+        ...item,
+        normalizedName: normalizeText(item.name)
+      });
+    }
+    
     return acc;
   }, {});
-  
-  // Ordena os itens por nome
-  const sortedItems = Object.values(groupedItems).sort((a, b) => 
-    a.normalizedName.localeCompare(b.normalizedName)
-  );
-  
-  // Renderiza os itens agrupados
-  sortedItems.forEach((item) => {
-    const node = document.createElement('div'); 
-    node.className = 'item';
-    node.innerHTML = `
-      <div style="max-width:70%">
-        <strong style="text-transform:capitalize">${item.originalName || item.name}</strong>
-        <div class="small">${item.qty} ${item.unit}</div>
+
+  // Ordem desejada das categorias
+  const categoryOrder = [
+    'carnes', 'laticinios', 'graos', 'padaria', 'hortifruti',
+    'bebidas', 'enlatados', 'oleaginosas', 'temperos', 'oleos',
+    'acucares', 'molhos', 'lanches', 'outros'
+  ];
+
+  // Renderiza cada categoria
+  categoryOrder.forEach(category => {
+    if (!itemsByCategory[category] || itemsByCategory[category].length === 0) return;
+
+    const categoryName = {
+      'hortifruti': 'Hortifrúti',
+      'carnes': 'Carnes, Aves e Ovo',
+      'laticinios': 'Laticínios e Frios',
+      'graos': 'Grãos e Cereais',
+      'padaria': 'Padaria e Matinais',
+      'bebidas': 'Bebidas',
+      'enlatados': 'Enlatados e Conservas',
+      'oleaginosas': 'Oleaginosas e Sementes',
+      'temperos': 'Temperos e Especiarias',
+      'oleos': 'Óleos e Gorduras',
+      'acucares': 'Açúcares e Ingredientes de Forno',
+      'molhos': 'Molhos, Condimentos e Vinagres',
+      'lanches': 'Lanches e Petiscos',
+      'outros': 'Outros'
+    }[category] || 'Outros';
+
+    const categoryEl = document.createElement('div');
+    categoryEl.className = 'category-section';
+    categoryEl.innerHTML = `
+      <div class="category-header">
+        <h3>${categoryName}</h3>
       </div>
-      <div>
-        <button data-name="${item.name}" data-unit="${item.unit}" class="btn-ghost">Remover</button>
-      </div>
+      <div class="items-container" id="category-${category}"></div>
     `;
-    el.appendChild(node);
+    el.appendChild(categoryEl);
+
+    const categoryItemsEl = categoryEl.querySelector('.items-container');
+    
+    // Ordena os itens da categoria em ordem alfabética
+    const sortedItems = [...itemsByCategory[category]].sort((a, b) => 
+      a.normalizedName.localeCompare(b.normalizedName, 'pt-BR', {sensitivity: 'base'})
+    );
+
+    // Renderiza os itens da categoria
+    sortedItems.forEach(item => {
+      const node = document.createElement('div');
+      node.className = 'item';
+      node.innerHTML = `
+        <div style="max-width:70%">
+          <strong style="text-transform:capitalize">${item.name}</strong>
+          <div class="small">${item.qty} ${item.unit}</div>
+        </div>
+        <div>
+          <button data-name="${item.name}" data-unit="${item.unit}" class="btn-ghost">Remover</button>
+        </div>
+      `;
+      categoryItemsEl.appendChild(node);
+    });
   });
 
   // Atualiza os eventos dos botões de remover
   el.querySelectorAll('button[data-name]').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       const name = btn.dataset.name;
       const unit = btn.dataset.unit;
       const normalizedSearch = normalizeText(name);
@@ -140,38 +199,34 @@ function renderList() {
   });
 }
 
-// Adicionar item único
 document.addEventListener('click', (e) => {
-  // Adicionar vários itens
+  // Adicionar item manual
   if (e.target.id === 'm_paste') {
-    const text = qs('#m_invBulk').value.trim();
-    if (!text) return alert('Cole as linhas com os itens');
-    
-    const lines = text.split('\n')
-      .map(line => line.trim())
-      .filter(Boolean);
-    
-    let added = 0;
-    lines.forEach(line => {
-      const item = parseLine(line);
-      if (item) {
-        window.inventory.push(item);
-        added++;
-      }
-    });
-    
+    const name = qs('#m_itemName').value.trim();
+    const qty = parseFloat(qs('#m_itemQty').value);
+    const unit = qs('#m_itemUnit').value;
+    const category = qs('#m_itemCategory').value;
+
+    if (!name || isNaN(qty) || qty <= 0) {
+      return alert('Preencha todos os campos corretamente');
+    }
+
+    const newItem = {
+      name: name,
+      qty: qty,
+      unit: unit,
+      category: category
+    };
+
+    window.inventory.push(newItem);
     window.saveAll();
-    qs('#m_invBulk').value = '';
     renderList();
-    setAlert(`Adicionados ${added} itens`);
+    setAlert('Item adicionado com sucesso!');
+
+    // Limpa os campos
+    qs('#m_itemName').value = '';
+    qs('#m_itemQty').value = '';
+    qs('#m_itemUnit').value = 'Unidade';
   }
 
-  // Limpar inventário
-  if (e.target.id === 'm_clearInv') {
-    if (!confirm('Tem certeza que deseja limpar todo o inventário?')) return;
-    window.inventory = [];
-    window.saveAll();
-    renderList();
-    setAlert('Inventário limpo');
-  }
-});//
+});

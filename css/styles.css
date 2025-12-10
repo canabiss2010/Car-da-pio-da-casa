@@ -187,3 +187,45 @@
 .coffee div:nth-child(3) {
   animation-delay: 0.2s;
 }
+/* Estilos para as categorias */
+.category-section {
+  margin-bottom: 24px;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.category-header {
+  background-color: #f5f5f5;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.category-header h3 {
+  margin: 0;
+  font-size: 1.1em;
+  color: #333;
+  font-weight: 600;
+}
+
+.items-container {
+  padding: 8px;
+}
+
+.items-container .item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.2s;
+}
+
+.items-container .item:last-child {
+  border-bottom: none;
+}
+
+.items-container .item:hover {
+  background-color: #f9f9f9;
+}
