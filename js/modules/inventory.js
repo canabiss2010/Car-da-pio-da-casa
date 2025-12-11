@@ -2,7 +2,7 @@
 import { qs, parseLine } from './utils.js';
 import { openModal, setAlert } from './ui.js';
 import { barcodeScanner } from './barcode.js';
-
+let currentSearchTerm = '';
 
 export function showInventory() {
   const html = `
@@ -67,7 +67,8 @@ export function showInventory() {
   
   openModal('Dispensa', html);
   renderList();
-  
+  setupSearch();
+
   // Configura o evento do botão de código de barras
   const barcodeBtn = qs('#startBarcode');
   if (barcodeBtn) {
@@ -80,7 +81,7 @@ function normalizeText(text) {
   return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
-function renderList() {
+function renderList(searchTerm = '') {
   const el = qs('#m_invList'); 
   if (!el) return;
   
@@ -94,10 +95,16 @@ function renderList() {
   // Agrupa itens por categoria
   const itemsByCategory = window.inventory.reduce((acc, item) => {
     const category = item.category || 'outros';
+
+    //filtra por busca
+    if (searchTerm && !normalizeText(item.name).startsWith(normalizeText(searchTerm))) {
+      return acc;
+    }
+    
     if (!acc[category]) {
       acc[category] = [];
     }
-    
+  
     // Verifica se já existe um item com o mesmo nome e unidade
     const existingItemIndex = acc[category].findIndex(i => 
       normalizeText(i.name) === normalizeText(item.name) && i.unit === item.unit
@@ -196,6 +203,16 @@ function renderList() {
       renderList();
       setAlert(`Item removido: ${name}`);
     });
+  });
+}
+
+function setupSearch() {
+  const searchInput = document.querySelector('input[placeholder="Pesquisar itens..."]');
+  if (!searchInput) return;
+
+  searchInput.addEventListener('input', (e) => {
+    currentSearchTerm = e.target.value.trim();
+    renderList(currentSearchTerm);
   });
 }
 

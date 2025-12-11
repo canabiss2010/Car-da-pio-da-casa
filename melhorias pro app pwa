@@ -13,12 +13,7 @@ addMissingToShoppingList(): Adiciona itens em falta automaticamente
 BLOCO DA DISPENSA
 HOJE
 1- adicionar um modal pra pessao confirmar se quer deletar o produto
-2- um botao de 3 pontinho no bloco de cada ingrediente que abre uma mini listinha das informacoes dele ( codigo de barras e sua qauntidade)
-3- ter uma categoria pra cada ingrediente (q nem nas receitas)
-4- trocar a ordem (ler codigo de barras primeiro / adicionar manualmente embaixo) 
 . Gerenciamento de Produtos
-getProduct(id): Busca um produto específico pelo ID
-searchProducts(query): Busca produtos por nome
 updateProduct(id, updateData): Atualiza um produto existente
 . Estoque
 getInventory(): Lista todos os itens em estoque
@@ -54,13 +49,12 @@ getQuantityUnitConversions(): Mostra conversões entre unidades
 - colocar um corretor ortografico
 - melhorar o visual, com cores, subtitulos e deixar tudo padrão (ULTIMA COISA)
 
-HOJEE
-organizar a tela pra adiconar manualmente os ingredientes
 organizar a tela pra adicionar pelo leitor de codigo de barras (colocar a quantia de pacotes/categoria)
-organizar o visual do inventario depois de adiconar um produto
 fazer a barra depesquisa e o filtro funcionarem (por nome e por categoria)
 
-
+HOJEEEE
+escrever q nos ingredientes da receitas tem q colocar as medidas/ organizar visualmente pra ficar facil
+revisar como as receitas sao selecionadas no criador de plano (porcoes)
 
 
 
