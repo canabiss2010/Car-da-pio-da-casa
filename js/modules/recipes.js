@@ -39,7 +39,11 @@ export function showRecipes() {
         </div>  
       </div>
       <label>Ingredientes (um por linha: nome,quantidade,unidade)</label>
-      <textarea id="m_recIngredients" rows="6" placeholder="arroz,2,xic\nfeijao,1,kg" style="width:100%"></textarea>
+      <div class="autocomplete-wrapper" style="position:relative;width:100%;">
+        <textarea id="m_recIngredients" rows="6" placeholder="arroz,2,xic\nfeijao,1,kg" style="width:100%;"></textarea>
+        <!-- box de sugestões de ingrediente, posicionada dentro da caixa -->
+        <ul id="ingredientSuggestions" class="suggestions"></ul>
+      </div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button id="m_addRec" class="btn">Salvar Receita</button>
         <button id="m_clearRec" class="btn-ghost">Limpar</button>
@@ -49,6 +53,8 @@ export function showRecipes() {
   `;
   openModal('Receitas', html);
   renderRecipeList();
+  // ativa autocomplete de ingredientes
+  setupIngredientAutocomplete();
 }
 
 function renderRecipeList() {
@@ -209,6 +215,168 @@ function loadRecipeForEdit(idx) {
   currentEditIndex = idx;
 }
 
+// --- autocomplete helpers --------------------------------------------------
+
+// normaliza texto removendo acentos e caracteres especiais para comparação
+function normalizeText(text) {
+  // remove diacritics like á â ã etc so comparisons are accent-insensitive
+  return text
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+// retorna o prefixo do ingrediente sendo editado no textarea (antes da vírgula)
+function getCurrentIngredientPrefix(textarea) {
+  const pos = textarea.selectionStart;
+  const before = textarea.value.substring(0, pos);
+  const lines = before.split('\n');
+  const current = lines[lines.length - 1];
+  return current.split(',')[0].trim();
+}
+
+// calcula coordenadas do caret dentro do textarea (fantasma div)
+function getCaretCoordinates(el, position) {
+  const div = document.createElement('div');
+  const style = window.getComputedStyle(el);
+  Array.from(style).forEach(name => {
+    div.style[name] = style[name];
+  });
+  div.style.position = 'absolute';
+  div.style.visibility = 'hidden';
+  div.style.whiteSpace = 'pre-wrap';
+  div.style.wordWrap = 'break-word';
+  div.style.overflow = 'auto';
+  div.style.width = el.offsetWidth + 'px';
+  div.textContent = el.value.substring(0, position);
+  const span = document.createElement('span');
+  span.textContent = el.value.substring(position) || '.';
+  div.appendChild(span);
+  document.body.appendChild(div);
+  const coords = { top: span.offsetTop, left: span.offsetLeft };
+  document.body.removeChild(div);
+  return coords;
+}
+
+// aplica sugestão ao textarea substituindo o prefixo atual
+function applySuggestion(textarea, suggestion) {
+  const pos = textarea.selectionStart;
+  const before = textarea.value.substring(0, pos);
+  const after = textarea.value.substring(pos);
+
+  const lines = before.split('\n');
+  let current = lines[lines.length - 1];
+  const commaIdx = current.indexOf(',');
+  if (commaIdx >= 0) {
+    // there is already a comma, keep the remainder (quantity/unit)
+    current = suggestion + current.substring(commaIdx);
+  } else {
+    // no comma yet: replace prefix and add a comma to help user continue
+    current = suggestion + ',';
+  }
+  lines[lines.length - 1] = current;
+  const newBefore = lines.join('\n');
+  textarea.value = newBefore + after;
+  const newPos = newBefore.length;
+  textarea.setSelectionRange(newPos, newPos);
+  textarea.focus();
+  qs('#ingredientSuggestions').classList.remove('active');
+}
+
+// configura o comportamento de autocomplete no textarea de ingredientes
+function setupIngredientAutocomplete() {
+  const textarea = qs('#m_recIngredients');
+  const box = qs('#ingredientSuggestions');
+  if (!textarea || !box) return;
+
+  let currentMatches = [];
+  let selectedIndex = -1;
+
+  function updateHighlight() {
+    const items = box.querySelectorAll('.suggestion-item');
+    items.forEach((item, i) => {
+      if (i === selectedIndex) {
+        item.classList.add('highlighted');
+      } else {
+        item.classList.remove('highlighted');
+      }
+    });
+  }
+
+  textarea.addEventListener('input', () => {
+    const pos = textarea.selectionStart;
+    const before = textarea.value.substring(0, pos);
+    // se o caractere imediatamente anterior for vírgula, estamos na quantidade/uni e não devemos sugerir
+    if (before.endsWith(',')) {
+      box.classList.remove('active');
+      currentMatches = [];
+      selectedIndex = -1;
+      return;
+    }
+
+    const prefix = getCurrentIngredientPrefix(textarea);
+    if (!prefix) {
+      box.classList.remove('active');
+      currentMatches = [];
+      selectedIndex = -1;
+      return;
+    }
+
+    const normalizedPrefix = normalizeText(prefix);
+    const uniqueNames = Array.from(new Set((window.inventory || []).map(i => i.name)));
+    currentMatches = uniqueNames.filter(name =>
+      normalizeText(name).startsWith(normalizedPrefix)
+    );
+
+    if (currentMatches.length === 0) {
+      box.classList.remove('active');
+      selectedIndex = -1;
+      return;
+    }
+
+    box.innerHTML = currentMatches
+      .map(m => `<li class="suggestion-item" style="padding:2px 0;cursor:pointer">${m}</li>`)
+      .join('');
+    box.classList.add('active');
+    selectedIndex = -1;
+
+    // position box near caret, just below the current line
+    const coords = getCaretCoordinates(textarea, textarea.selectionStart);
+    // account for vertical scrolling inside textarea
+    const scrollTop = textarea.scrollTop;
+    box.style.left = coords.left + 'px';
+    // place well below the current line so it doesn't cover the text being typed
+    box.style.top = (coords.top - scrollTop + 20) + 'px';
+
+    box.querySelectorAll('.suggestion-item').forEach((el, idx) => {
+      el.addEventListener('mousedown', e => {
+        e.preventDefault();
+        applySuggestion(textarea, currentMatches[idx]);
+      });
+    });
+  });
+  textarea.addEventListener('keydown', (e) => {
+    if (!box.classList.contains('active') || currentMatches.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectedIndex = (selectedIndex + 1) % currentMatches.length;
+      updateHighlight();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectedIndex = (selectedIndex - 1 + currentMatches.length) % currentMatches.length;
+      updateHighlight();
+    } else if (e.key === 'Enter' && selectedIndex >= 0) {
+      e.preventDefault();
+      applySuggestion(textarea, currentMatches[selectedIndex]);
+    }
+  });
+
+  textarea.addEventListener('blur', () => {
+    setTimeout(() => { box.classList.remove('active'); }, 150);
+  });
+}
+
 document.addEventListener('click', (e) => {
 
   // Salvar receita
@@ -230,7 +398,7 @@ document.addEventListener('click', (e) => {
       const parts = line.split(',').map(s => s.trim());
       const ingredientName = parts[0];
       const qty = parts[1];
-      
+
       // Se tem nome mas sem vírgula = esqueceu completamente da quantidade
       if (ingredientName && !line.includes(',')) {
         ingredientValidationError = `Ingrediente '${ingredientName}' da receita '${name}' incompleto`;
