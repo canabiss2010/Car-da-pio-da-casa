@@ -1,6 +1,7 @@
 // js/modules/recipes.js
 import { qs, getIngredientName } from './utils.js';
 import { openModal, closeModal, setAlert, clearAlerts } from './ui.js';
+import { normalizeUnit, isValidUnit, getValidUnits } from './unitNormalizer.js';
 
 const frequencyLevels = [
   { level: 1, percentage: 10, label: 'Muito Raro' },
@@ -123,10 +124,13 @@ function renderRecipeList() {
             ${recipe.servings || 4} porções • ${freqInfo.label}
           </div>
           <div style="display:flex;gap:8px;margin-top:8px">
-            <button data-idx="${getRecipeIndex(recipe)}" data-action="edit" class="btn-ghost">
+            <button data-idx="${getRecipeIndex(recipe)}" data-action="view" class="btn-ghost" style="flex:1">
+              Ver detalhes
+            </button>
+            <button data-idx="${getRecipeIndex(recipe)}" data-action="edit" class="btn-ghost" style="flex:1">
               Editar
             </button>
-            <button data-idx="${getRecipeIndex(recipe)}" data-action="delete" class="btn-ghost">
+            <button data-idx="${getRecipeIndex(recipe)}" data-action="delete" class="btn-ghost" style="flex:1">
               Excluir
             </button>
           </div>
@@ -154,11 +158,50 @@ function renderRecipeList() {
         }
       } else if (action === 'edit') {
         loadRecipeForEdit(idx);
+      } else if (action === 'view') {
+        showRecipeDetails(recipe);
       }
     });
   });
 }
 
+
+function showRecipeDetails(recipe) {
+  if (!recipe) return;
+
+  const freqInfo = frequencyLevels.find(f => f.level === (recipe.frequency || 3)) || frequencyLevels[2];
+
+  const ingredientsHtml = recipe.ingredients && recipe.ingredients.length > 0
+    ? recipe.ingredients.map(ing => `<li>${ing.name}: ${ing.qty}${ing.unit}</li>`).join('')
+    : '<li>Nenhum ingrediente cadastrado</li>';
+
+  const html = `
+    <div style="padding: 16px;">
+      <h3 style="margin-bottom: 16px; color: var(--accent);">${recipe.name}</h3>
+
+      <div style="display: grid; gap: 12px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #f5f5f5; border-radius: 6px;">
+          <span><strong>Porções:</strong></span>
+          <span>${recipe.servings || 4} pessoas</span>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #f5f5f5; border-radius: 6px;">
+          <span><strong>Frequência:</strong></span>
+          <span>${freqInfo.label}</span>
+        </div>
+      </div>
+
+      <div>
+        <strong style="margin-bottom: 8px; display: block;">Ingredientes:</strong>
+        <ul style="margin: 0; padding-left: 20px; background: #f9f9f9; padding: 12px; border-radius: 6px; border-left: 3px solid var(--accent);">
+          ${ingredientsHtml}
+        </ul>
+      </div>
+    </div>
+  `;
+
+  openModal(`Detalhes: ${recipe.name}`, html);
+}
 
 function clearRecipeForm() {
   qs('#m_recName').value = '';
@@ -394,31 +437,99 @@ document.addEventListener('click', (e) => {
 
     // Valida ANTES de fazer filter: se tem linhas, todas precisam de quantidade
     let ingredientValidationError = '';
+    let invalidUnits = [];
     ingredientLines.forEach(line => {
       const parts = line.split(',').map(s => s.trim());
       const ingredientName = parts[0];
-      const qty = parts[1];
 
       // Se tem nome mas sem vírgula = esqueceu completamente da quantidade
       if (ingredientName && !line.includes(',')) {
         ingredientValidationError = `Ingrediente '${ingredientName}' da receita '${name}' incompleto`;
       }
-      // Se tem vírgula mas sem quantidade = colocou vírgula mas esqueceu do número
-      if (ingredientName && line.includes(',') && !qty) {
+      // Se tem vírgula mas não tem pelo menos 2 partes = formato inválido
+      if (ingredientName && line.includes(',') && parts.length < 2) {
         ingredientValidationError = `Ingrediente '${ingredientName}' da receita '${name}' incompleto`;
       }
     });
 
     const ingredients = ingredientLines
       .map(line => {
-        const [name, qty, unit] = line.split(',').map(s => s.trim());
+        const parts = line.split(',').map(s => s.trim());
+        let name, qty, unit;
+
+        if (parts.length >= 2) {
+          name = parts[0];
+
+          // Se temos 3+ partes, assume nome,qtd,unidade
+          if (parts.length >= 3) {
+            qty = parts[1];
+            unit = parts.slice(2).join(' ').trim();
+
+            // Se a quantidade parece incompleta (ex: "0" quando deveria ser "0,2")
+            // e a unidade começa com dígito, tenta recombinação
+            const testQty = parseFloat(qty.replace(',', '.')) || 0;
+            if (testQty === 0 && unit && /^[\d,.]/.test(unit)) {
+              // Qty é 0 e unit começa com dígito/vírgula: provavelmente separação incorreta
+              const firstUnitPart = unit.split(' ')[0];
+              if (/^[\d,.]+/.test(firstUnitPart)) {
+                qty = qty + ',' + firstUnitPart; // "0" + "," + "2" = "0,2"
+                unit = unit.split(' ').slice(1).join(' ').trim() || 'un';
+              }
+            }
+          } else {
+            // 2 partes: nome,qtd+unidade ou nome,qtd
+            const qtyUnit = parts[1];
+
+            // Tenta detectar se é só quantidade (números) ou quantidade+unidade
+            if (/^\d+([,.]\d+)?$/.test(qtyUnit)) {
+              // Só números: assume que é quantidade sem unidade
+              qty = qtyUnit;
+              unit = 'un';
+            } else {
+              // Contém letras/não-números: tenta separar quantidade e unidade
+              const qtyMatch = qtyUnit.match(/^([\d,.]+)(.*)$/);
+              if (qtyMatch) {
+                qty = qtyMatch[1];
+                unit = qtyMatch[2].trim() || 'un';
+              } else {
+                // Não conseguiu separar, assume tudo como quantidade
+                qty = qtyUnit;
+                unit = 'un';
+              }
+            }
+          }
+        } else {
+          // Menos de 2 partes: inválido
+          name = parts[0] || '';
+          qty = '0';
+          unit = 'un';
+        }
+
+        const quantity = parseFloat(qty.replace(',', '.')) || 0;
+
+        // Verifica se a unidade é válida antes de normalizar
+        if (!isValidUnit(unit)) {
+          invalidUnits.push(unit);
+          return null; // Ingrediente inválido
+        }
+
+        // Normaliza a unidade antes de salvar
+        const normalized = normalizeUnit(quantity, unit || 'un');
+
         return {
           name: name.toLowerCase(),
-          qty: parseFloat(qty.replace(',', '.')) || 0,
-          unit: unit || 'un'
+          qty: normalized.qty,
+          unit: normalized.unit
         };
       })
-      .filter(ing => ing.name && !isNaN(ing.qty) && ing.qty > 0);
+      .filter(ing => ing !== null && ing.name && !isNaN(ing.qty) && ing.qty > 0);
+
+    // Verifica unidades inválidas
+    if (invalidUnits.length > 0) {
+      const validUnits = getValidUnits();
+      const uniqueInvalid = [...new Set(invalidUnits)];
+      return setAlert(`Unidades não suportadas: ${uniqueInvalid.join(', ')}. Use apenas: ${validUnits.join(', ')}`, 'error', 0);
+    }
 
     if (!name) return setAlert('Digite um nome para a receita', 'error', 0);
     if (!frequencyValue) return setAlert('Selecione a frequência da receita', 'error', 0);

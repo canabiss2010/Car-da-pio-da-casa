@@ -1,6 +1,7 @@
 // js/modules/planning.js
 import { qs } from './utils.js';
 import { openModal, closeModal, setAlert } from './ui.js';
+import { normalizeUnit } from './unitNormalizer.js';
 
 // Escala de frequência
 const frequencyLevels = [
@@ -14,6 +15,57 @@ const frequencyLevels = [
 function getFrequencyPercentage(level) {
   const freq = frequencyLevels.find(f => f.level === level);
   return freq ? freq.percentage : 10; // Default para 10% se não encontrar
+}
+
+/**
+ * Desconta os ingredientes do estoque quando o plano é salvo
+ * @param {Array} plan - Plano gerado
+ * @param {number} people - Número de pessoas
+ */
+function applyPlanToInventory(plan, people) {
+  if (!plan || !window.inventory) return;
+
+  // Itera por cada dia do plano
+  plan.forEach((dayMeals) => {
+    dayMeals.forEach((meal) => {
+      if (!meal.recipe || !meal.recipe.ingredients) return;
+
+      // Calcula a escala proporcional de porções
+      const recipeServings = meal.recipe.servings || 4;
+      const portionScale = people / recipeServings;
+
+      // Desconta cada ingrediente do estoque
+      meal.recipe.ingredients.forEach((ingredient) => {
+        // Quantidade a descontar (proporcional ao número de pessoas)
+        const quantityToRemove = ingredient.qty * portionScale;
+
+        // Procura o item no estoque (case-insensitive)
+        const inventoryItem = window.inventory.find(item =>
+          item.name.toLowerCase() === ingredient.name.toLowerCase() &&
+          item.unit === ingredient.unit
+        );
+
+        if (inventoryItem) {
+          // Desconta do estoque
+          inventoryItem.qty -= quantityToRemove;
+
+          // Se ficou negativo, avisa (mas não remove)
+          if (inventoryItem.qty < 0) {
+            setAlert(
+              `⚠️ Estoque insuficiente: ${ingredient.name} (faltam ${Math.abs(inventoryItem.qty).toFixed(2)} ${ingredient.unit})`,
+              'warning',
+              0
+            );
+            // Reseta para 0 se ficou negativo
+            inventoryItem.qty = 0;
+          }
+        } else {
+          // Avisa se ingrediente não foi encontrado no estoque
+          console.warn(`Ingrediente não encontrado no estoque: ${ingredient.name} (${ingredient.unit})`);
+        }
+      });
+    });
+  });
 }
 
 export function showCreatePlan() {
@@ -219,6 +271,17 @@ function showPlanPreview(plan, people, isRealPlan) {
          </span>
          ${isRealPlan ? `<button class="btn-ghost" data-day="${dayIndex}" data-meal="${mealIndex}">Trocar</button>` : ''}
        </div>
+       <div class="recipe-ingredients" style="margin-top: 8px; font-size: 0.85em; color: #666;">
+         ${meal.recipe && meal.recipe.ingredients && meal.recipe.ingredients.length > 0 ?
+          meal.recipe.ingredients.slice(0, 3).map(ing =>
+            `${ing.name}: ${ing.qty}${ing.unit}`
+          ).join(' • ') + (meal.recipe.ingredients.length > 3 ? ` • +${meal.recipe.ingredients.length - 3} mais` : '') :
+          'Clique em "Ver detalhes" para ver os ingredientes'
+        }
+       </div>
+       <button class="btn-ghost-small" data-recipe-details="${dayIndex}-${mealIndex}" style="margin-top: 4px; font-size: 0.8em; padding: 2px 6px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; color: #666;">
+         Ver detalhes
+       </button>
      `;
       mealsList.appendChild(mealElement);
     });
@@ -236,9 +299,12 @@ function showPlanPreview(plan, people, isRealPlan) {
 
     // 2. Depois o evento do botão Salvar
     saveButton.querySelector('#m_savePlan').addEventListener('click', () => {
+      // Desconta os ingredientes do estoque antes de salvar
+      applyPlanToInventory(window.plan, window.planMeta?.people || 4);
+
       window.saveAll();
       closeModal();
-      setAlert('Plano salvo com sucesso!');
+      setAlert('Plano salvo e estoque atualizado com sucesso!');
     });
 
     // 3. E por fim, o evento do botão Trocar (fora do evento do Salvar)
@@ -301,6 +367,27 @@ function showPlanPreview(plan, people, isRealPlan) {
       selectContainer.querySelector('#cancelChange').addEventListener('click', () => {
         selectContainer.remove();
       });
+    });
+
+    // 4. Evento do botão "Ver detalhes"
+    container.addEventListener('click', (e) => {
+      const detailsBtn = e.target.closest('.btn-ghost-small[data-recipe-details]');
+      if (!detailsBtn) return;
+
+      const [dayIndex, mealIndex] = detailsBtn.dataset.recipeDetails.split('-').map(Number);
+      const meal = plan[dayIndex][mealIndex];
+
+      if (meal && meal.recipe) {
+        showRecipeDetails(meal.recipe, people);
+      } else {
+        // Se não tem recipe completo, tenta encontrar pela window.recipes
+        const recipe = window.recipes?.find(r => r.name === meal.name);
+        if (recipe) {
+          showRecipeDetails(recipe, people);
+        } else {
+          setAlert('Receita não encontrada', 'error');
+        }
+      }
     });
   }
 }
@@ -378,4 +465,39 @@ export function showCurrentPlan() {
       });
     }
   }, 100);
+}
+
+/**
+ * Mostra os detalhes completos de uma receita no planning
+ * @param {Object} recipe - Receita a ser exibida
+ * @param {number} people - Número de pessoas
+ */
+function showRecipeDetails(recipe, people) {
+  if (!recipe || !recipe.ingredients) return;
+
+  const portionScale = people / (recipe.servings || 4);
+
+  const ingredientsHtml = recipe.ingredients
+    .map(ing => {
+      const scaledQty = ing.qty * portionScale;
+      return `<li>${ing.name}: ${scaledQty.toFixed(2)}${ing.unit}</li>`;
+    })
+    .join('');
+
+  const html = `
+    <div style="padding: 16px;">
+      <h3 style="margin-bottom: 16px;">${recipe.name}</h3>
+      <div style="margin-bottom: 16px;">
+        <strong>Porções:</strong> ${recipe.servings || 4} (escalado para ${people} pessoas)
+      </div>
+      <div>
+        <strong>Ingredientes:</strong>
+        <ul style="margin-top: 8px; padding-left: 20px;">
+          ${ingredientsHtml}
+        </ul>
+      </div>
+    </div>
+  `;
+
+  openModal(`Detalhes: ${recipe.name}`, html);
 }

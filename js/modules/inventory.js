@@ -2,6 +2,7 @@
 import { qs, parseLine } from './utils.js';
 import { openModal, setAlert, clearAlerts } from './ui.js';
 import { barcodeScanner } from './barcode.js';
+import { normalizeUnit, getStandardUnits } from './unitNormalizer.js';
 let currentSearchTerm = '';
 
 export function showInventory() {
@@ -228,10 +229,13 @@ document.addEventListener('click', (e) => {
       return setAlert('Preencha todos os campos corretamente', 'error', 0);
     }
 
+    // Normaliza a unidade antes de salvar
+    const normalized = normalizeUnit(qty, unit);
+
     const newItem = {
       name: name,
-      qty: qty,
-      unit: unit,
+      qty: normalized.qty,
+      unit: normalized.unit,
       category: category
     };
 
