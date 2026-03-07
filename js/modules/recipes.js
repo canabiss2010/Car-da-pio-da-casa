@@ -1,6 +1,6 @@
 // js/modules/recipes.js
 import { qs, getIngredientName } from './utils.js';
-import { openModal, closeModal, setAlert } from './ui.js';
+import { openModal, closeModal, setAlert, clearAlerts } from './ui.js';
 
 const frequencyLevels = [
   { level: 1, percentage: 10, label: 'Muito Raro' },
@@ -27,7 +27,7 @@ export function showRecipes() {
           <option value="5">Muito Frequente</option>
         </select>
         <select id="m_recCategory" style="min-width:140px">
-          <option value="" selected disabled>Categoria</option>
+          <option value="" disabled>Categorias</option>
           <option value="proteina">Proteínas</option>
           <option value="carboidrato">Carboidratos</option>
           <option value="vegetais">Vegetais</option>
@@ -54,7 +54,7 @@ export function showRecipes() {
 function renderRecipeList() {
   const el = qs('#m_recList');
   if (!el) return;
-  
+
   el.innerHTML = '';
 
   if (window.recipes.length === 0) {
@@ -73,8 +73,8 @@ function renderRecipeList() {
   }, {});
 
   // Ordem desejada das categorias
-  const categoryOrder = ['proteina', 'carboidrato', 'verdura', 'outros'];
-  
+  const categoryOrder = ['proteina', 'carboidrato', 'vegetais', 'outros'];
+
   // Renderiza cada categoria
   categoryOrder.forEach(category => {
     if (!recipesByCategory[category]) return;
@@ -97,8 +97,8 @@ function renderRecipeList() {
     el.appendChild(categoryEl);
 
     // Ordena as receitas da categoria em ordem alfabética
-    const sortedRecipes = [...recipesByCategory[category]].sort((a, b) => 
-      a.name.localeCompare(b.name, 'pt-BR', {sensitivity: 'base'})
+    const sortedRecipes = [...recipesByCategory[category]].sort((a, b) =>
+      a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' })
     );
 
     // Renderiza as receitas desta categoria
@@ -107,7 +107,7 @@ function renderRecipeList() {
       const node = document.createElement('div');
       node.className = 'item';
       const freqInfo = frequencyLevels.find(f => f.level === (recipe.frequency || 3)) || frequencyLevels[2];
-      
+
       node.innerHTML = `
         <div style="flex:1">
           <div style="display:flex;justify-content:space-between;align-items:center">
@@ -136,9 +136,9 @@ function renderRecipeList() {
       const idx = Number(btn.dataset.idx);
       const action = btn.dataset.action;
       const recipe = window.recipes[idx];
-      
+
       if (!recipe) return;
-      
+
       if (action === 'delete') {
         if (confirm(`Tem certeza que deseja excluir a receita "${recipe.name}"?`)) {
           window.recipes.splice(idx, 1);
@@ -156,18 +156,19 @@ function renderRecipeList() {
 
 function clearRecipeForm() {
   qs('#m_recName').value = '';
-  qs('#m_recFrequency').value = '3';
-  qs('#m_recCategory').value = 'vegetais';
+  qs('#m_recFrequency').value = '';
+  qs('#m_recCategory').value = '';
   qs('#m_recServings').value = '4';
   qs('#m_recIngredients').value = '';
   currentEditIndex = -1;
   qs('#m_addRec').textContent = 'Salvar Receita';
 }
 
+
 // Função auxiliar para encontrar o índice de uma receita
 function getRecipeIndex(recipe) {
-  return window.recipes.findIndex(r => 
-    r.name === recipe.name && 
+  return window.recipes.findIndex(r =>
+    r.name === recipe.name &&
     JSON.stringify(r.ingredients) === JSON.stringify(recipe.ingredients)
   );
 }
@@ -175,18 +176,18 @@ function getRecipeIndex(recipe) {
 function loadRecipeForEdit(idx) {
   const recipe = window.recipes[idx];
   if (!recipe) return;
-  
+
   const nameInput = qs('#m_recName');
   const servingsInput = qs('#m_recServings');
   const categorySelect = qs('#m_recCategory');
   const frequencySelect = qs('#m_recFrequency');
   const ingredientsTextarea = qs('#m_recIngredients');
-  
+
   if (nameInput) nameInput.value = recipe.name || '';
   if (servingsInput) servingsInput.value = recipe.servings || 4;
   if (categorySelect) categorySelect.value = recipe.category || 'verdura';
   if (frequencySelect) frequencySelect.value = recipe.frequency || 3;
-  
+
   // Preenche os ingredientes
   if (ingredientsTextarea) {
     ingredientsTextarea.value = recipe.ingredients
@@ -213,34 +214,58 @@ document.addEventListener('click', (e) => {
   // Salvar receita
   if (e.target.id === 'm_addRec') {
     const name = qs('#m_recName').value.trim().toLowerCase().replace(/^\w/, c => c.toUpperCase());
-    const frequency = parseInt(qs('#m_recFrequency').value) || 3;
+    const frequencyValue = qs('#m_recFrequency').value;
+    const categoryValue = qs('#m_recCategory').value;
     const servings = Math.max(1, parseInt(qs('#m_recServings').value) || 4);
-    
+
     const ingredientsText = qs('#m_recIngredients').value.trim();
-    const ingredients = ingredientsText
+    const ingredientLines = ingredientsText
       .split('\n')
       .map(line => line.trim())
-      .filter(Boolean)
+      .filter(Boolean);
+
+    // Valida ANTES de fazer filter: se tem linhas, todas precisam de quantidade
+    let ingredientValidationError = '';
+    ingredientLines.forEach(line => {
+      const parts = line.split(',').map(s => s.trim());
+      const ingredientName = parts[0];
+      const qty = parts[1];
+      
+      // Se tem nome mas sem vírgula = esqueceu completamente da quantidade
+      if (ingredientName && !line.includes(',')) {
+        ingredientValidationError = `Ingrediente '${ingredientName}' da receita '${name}' incompleto`;
+      }
+      // Se tem vírgula mas sem quantidade = colocou vírgula mas esqueceu do número
+      if (ingredientName && line.includes(',') && !qty) {
+        ingredientValidationError = `Ingrediente '${ingredientName}' da receita '${name}' incompleto`;
+      }
+    });
+
+    const ingredients = ingredientLines
       .map(line => {
         const [name, qty, unit] = line.split(',').map(s => s.trim());
-        return { 
-          name: name.toLowerCase(), 
-          qty: parseFloat(qty.replace(',', '.')) || 0, 
-          unit: unit || 'un' 
+        return {
+          name: name.toLowerCase(),
+          qty: parseFloat(qty.replace(',', '.')) || 0,
+          unit: unit || 'un'
         };
       })
       .filter(ing => ing.name && !isNaN(ing.qty) && ing.qty > 0);
 
-    if (!name) return setAlert('Digite um nome para a receita', 'error');
-    if (ingredients.length === 0) return setAlert('Adicione pelo menos um ingrediente', 'error');
+    if (!name) return setAlert('Digite um nome para a receita', 'error', 0);
+    if (!frequencyValue) return setAlert('Selecione a frequência da receita', 'error', 0);
+    if (!categoryValue || categoryValue === '') return setAlert('Selecione o tipo de refeição', 'error', 0);
+    if (ingredientValidationError) return setAlert(ingredientValidationError, 'error', 0);
+    if (ingredients.length === 0) return setAlert('Adicione pelo menos um ingrediente', 'error', 0);
 
-    const category = qs('#m_recCategory').value || 'outros';
-    const recipe = { 
-      name, 
-      frequency,  
+    const frequency = parseInt(frequencyValue);
+    const category = categoryValue;
+    const recipe = {
+      name,
+      frequency,
       servings,
       category,
-      ingredients 
+      ingredients
     };
 
     if (currentEditIndex >= 0) {
@@ -251,16 +276,18 @@ document.addEventListener('click', (e) => {
       // Se é uma nova receita, adiciona normalmente
       window.recipes.push(recipe);
     }
-    
+
     window.saveAll();
-    
+    clearAlerts();
+
     // Limpa o formulário
     qs('#m_recName').value = '';
-    qs('#m_recServes').value = '4';
-    qs('#m_recFrequency').value = '3';
-    qs('#m_recDays').value = '2';
+    qs('#m_recServings').value = '4';
+    qs('#m_recFrequency').value = '';
+    qs('#m_recCategory').value = '';
     qs('#m_recIngredients').value = '';
-    
+    currentEditIndex = -1;
+
     renderRecipeList();
     setAlert(`Receita ${currentEditIndex >= 0 ? 'atualizada' : 'salva'}: ${name}`, 'success');
   }
@@ -269,9 +296,9 @@ document.addEventListener('click', (e) => {
   if (e.target.id === 'm_clearRec') {
     if (confirm('Limpar o formulário de receita?')) {
       qs('#m_recName').value = '';
-      qs('#m_recServes').value = '4';
-      qs('#m_recFrequency').value = '3';
-      qs('#m_recDays').value = '2';
+      qs('#m_recServings').value = '4';
+      qs('#m_recFrequency').value = '';
+      qs('#m_recCategory').value = '';
       qs('#m_recIngredients').value = '';
       currentEditIndex = -1;
     }

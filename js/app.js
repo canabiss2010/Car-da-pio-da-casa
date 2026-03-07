@@ -17,11 +17,11 @@ function loadInitialData() {
   window.inventory = validateJSON(localStorage.getItem(STORAGE_KEYS.INVENTORY)) || [];
   window.recipes = validateJSON(localStorage.getItem(STORAGE_KEYS.RECIPES)) || [];
   window.plan = validateJSON(localStorage.getItem(STORAGE_KEYS.PLAN)) || [];
-  
+
   // Migração de versão (se necessário)
   if (window.recipes.length > 0) {
-    window.recipes = window.recipes.map(r => ({ 
-      ...r, 
+    window.recipes = window.recipes.map(r => ({
+      ...r,
       frequency: r.frequency || r.priority || 1,
       servings: r.servings || 4
     }));
@@ -37,7 +37,7 @@ function saveAll() {
     localStorage.setItem(STORAGE_KEYS.PLAN, JSON.stringify(window.plan));
   } catch (e) {
     console.error('Erro ao salvar dados:', e);
-    UI.setAlert('Erro ao salvar dados. Verifique o espaço de armazenamento.', 'error');
+    UI.setAlert('Erro ao salvar dados. Verifique o espaço de armazenamento.', 'error', 0);
   }
 }
 
@@ -49,7 +49,7 @@ async function loadModule(modulePath, callback) {
     await callback(module);
   } catch (error) {
     console.error(`Erro ao carregar o módulo ${modulePath}:`, error);
-    UI.setAlert('Erro ao carregar a funcionalidade. Tente novamente.', 'error');
+    UI.setAlert('Erro ao carregar a funcionalidade. Tente novamente.', 'error', 0);
   } finally {
     UI.hideLoading();
   }
@@ -59,20 +59,20 @@ async function loadModule(modulePath, callback) {
 function setupEventListeners() {
   // Blocos principais
   const buttons = {
-  '#b-inv': './modules/inventory.js',
-  '#b-rec': './modules/recipes.js',
-  '#b-create': './modules/planning.js',
-  '#b-current': './modules/planning.js'
-};
+    '#b-inv': './modules/inventory.js',
+    '#b-rec': './modules/recipes.js',
+    '#b-create': './modules/planning.js',
+    '#b-current': './modules/planning.js'
+  };
 
   Object.entries(buttons).forEach(([selector, modulePath]) => {
     const button = qs(selector);
     if (button) {
       button.addEventListener('click', function handleClick() {
-        const action = selector === '#b-current' ? 'showCurrentPlan' : 
-                      selector === '#b-create' ? 'showCreatePlan' : 
-                      selector === '#b-rec' ? 'showRecipes' : 'showInventory';
-        
+        const action = selector === '#b-current' ? 'showCurrentPlan' :
+          selector === '#b-create' ? 'showCreatePlan' :
+            selector === '#b-rec' ? 'showRecipes' : 'showInventory';
+
         loadModule(modulePath, (module) => {
           if (typeof module[action] === 'function') {
             module[action]();
@@ -90,12 +90,12 @@ function setupEventListeners() {
         block.click();
       }
     });
-    
+
     block.addEventListener('focus', () => {
       block.style.outline = '2px solid var(--accent)';
       block.style.outlineOffset = '2px';
     });
-    
+
     block.addEventListener('blur', () => {
       block.style.outline = 'none';
     });

@@ -1,6 +1,6 @@
 // js/modules/inventory.js
 import { qs, parseLine } from './utils.js';
-import { openModal, setAlert } from './ui.js';
+import { openModal, setAlert, clearAlerts } from './ui.js';
 import { barcodeScanner } from './barcode.js';
 let currentSearchTerm = '';
 
@@ -64,7 +64,7 @@ export function showInventory() {
   </div>
     <div id="m_invList" class="list" style="margin-top:12px"></div>
   `;
-  
+
   openModal('Dispensa', html);
   renderList();
   setupSearch();
@@ -82,16 +82,16 @@ function normalizeText(text) {
 }
 
 function renderList(searchTerm = '') {
-  const el = qs('#m_invList'); 
+  const el = qs('#m_invList');
   if (!el) return;
-  
+
   el.innerHTML = '';
-  
+
   if (window.inventory.length === 0) {
     el.innerHTML = '<div class="small">Sem itens</div>';
     return;
   }
-  
+
   // Agrupa itens por categoria
   const itemsByCategory = window.inventory.reduce((acc, item) => {
     const category = item.category || 'outros';
@@ -100,16 +100,16 @@ function renderList(searchTerm = '') {
     if (searchTerm && !normalizeText(item.name).startsWith(normalizeText(searchTerm))) {
       return acc;
     }
-    
+
     if (!acc[category]) {
       acc[category] = [];
     }
-  
+
     // Verifica se já existe um item com o mesmo nome e unidade
-    const existingItemIndex = acc[category].findIndex(i => 
+    const existingItemIndex = acc[category].findIndex(i =>
       normalizeText(i.name) === normalizeText(item.name) && i.unit === item.unit
     );
-    
+
     if (existingItemIndex >= 0) {
       // Se existir, soma as quantidades
       acc[category][existingItemIndex].qty += item.qty;
@@ -120,7 +120,7 @@ function renderList(searchTerm = '') {
         normalizedName: normalizeText(item.name)
       });
     }
-    
+
     return acc;
   }, {});
 
@@ -163,10 +163,10 @@ function renderList(searchTerm = '') {
     el.appendChild(categoryEl);
 
     const categoryItemsEl = categoryEl.querySelector('.items-container');
-    
+
     // Ordena os itens da categoria em ordem alfabética
-    const sortedItems = [...itemsByCategory[category]].sort((a, b) => 
-      a.normalizedName.localeCompare(b.normalizedName, 'pt-BR', {sensitivity: 'base'})
+    const sortedItems = [...itemsByCategory[category]].sort((a, b) =>
+      a.normalizedName.localeCompare(b.normalizedName, 'pt-BR', { sensitivity: 'base' })
     );
 
     // Renderiza os itens da categoria
@@ -193,12 +193,12 @@ function renderList(searchTerm = '') {
       const name = btn.dataset.name;
       const unit = btn.dataset.unit;
       const normalizedSearch = normalizeText(name);
-      
+
       // Remove todos os itens com o mesmo nome (normalizado) e unidade
       window.inventory = window.inventory.filter(item => {
         return !(normalizeText(item.name) === normalizedSearch && item.unit === unit);
       });
-      
+
       window.saveAll();
       renderList();
       setAlert(`Item removido: ${name}`);
@@ -225,7 +225,7 @@ document.addEventListener('click', (e) => {
     const category = qs('#m_itemCategory').value;
 
     if (!name || isNaN(qty) || qty <= 0) {
-      return alert('Preencha todos os campos corretamente');
+      return setAlert('Preencha todos os campos corretamente', 'error', 0);
     }
 
     const newItem = {
@@ -237,6 +237,7 @@ document.addEventListener('click', (e) => {
 
     window.inventory.push(newItem);
     window.saveAll();
+    clearAlerts();
     renderList();
     setAlert('Item adicionado com sucesso!');
 

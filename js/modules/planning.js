@@ -46,12 +46,12 @@ export function showCreatePlan() {
   `;
 
   openModal('Criar Plano', html);
-  
+
   // Adiciona os event listeners após o modal ser renderizado
   setTimeout(() => {
     const genPlanBtn = document.getElementById('m_genPlan');
     const simBtn = document.getElementById('m_sim');
-    
+
     if (genPlanBtn) genPlanBtn.addEventListener('click', generatePlan);
     if (simBtn) simBtn.addEventListener('click', simulatePlan);
   }, 100);
@@ -63,7 +63,7 @@ function generatePlan() {
   const mealsPerDay = parseInt(qs('#m_meals').value) || 2;
 
   if (!window.recipes || window.recipes.length === 0) {
-    return setAlert('Adicione receitas primeiro!', 'error');
+    return setAlert('Adicione receitas primeiro!', 'error', 0);
   }
 
   // 1. Calcula quantas vezes cada receita deve aparecer
@@ -83,7 +83,7 @@ function generatePlan() {
 
   for (let day = 0; day < days; day++) {
     const dailyMeals = [];
-    
+
     // 2. Atualiza receitas ativas
     activeRecipes.forEach(recipe => recipe.mealsLeft--);
     activeRecipes = activeRecipes.filter(r => r.mealsLeft > 0);
@@ -100,13 +100,13 @@ function generatePlan() {
     // 4. Adiciona novas receitas se necessário
     while (dailyMeals.length < mealsPerDay) {
       // Ordena por prioridade (menos usadas primeiro, considerando a frequência)
-      recipesWithCount.sort((a, b) => 
+      recipesWithCount.sort((a, b) =>
         (a.currentCount / a.targetCount) - (b.currentCount / b.targetCount)
       );
 
       // Pega a próxima receita que ainda não atingiu o alvo
-      const nextRecipe = recipesWithCount.find(r => 
-        r.currentCount < r.targetCount && 
+      const nextRecipe = recipesWithCount.find(r =>
+        r.currentCount < r.targetCount &&
         !activeRecipes.some(ar => ar.recipe.name === r.name)
       ) || recipesWithCount[0]; // Se todas atingiram o alvo, pega a primeira
 
@@ -118,7 +118,7 @@ function generatePlan() {
 
       // Verifica se a receita dura mais de 1 dia
       const isMultiDay = mealsLast > 1;
-      
+
       // Adiciona ao cardápio
       dailyMeals.push({
         name: nextRecipe.name,
@@ -142,6 +142,8 @@ function generatePlan() {
   }
 
   window.plan = plan;
+  // guarda metadados para visualização futura
+  window.planMeta = { people, days, mealsPerDay };
   showPlanPreview(plan, people, true);
   setAlert('Prévia do plano gerada. Revise e clique em "Salvar Plano" para confirmar.');
 }
@@ -150,9 +152,9 @@ function simulatePlan() {
   const people = parseInt(qs('#m_people').value) || 4;
   const days = parseInt(qs('#m_days').value) || 7;
   const mealsPerDay = parseInt(qs('#m_meals').value) || 2;
-  
+
   if (!window.recipes || window.recipes.length === 0) {
-    return setAlert('Adicione receitas primeiro!', 'error');
+    return setAlert('Adicione receitas primeiro!', 'error', 0);
   }
 
   const plan = [];
@@ -161,16 +163,16 @@ function simulatePlan() {
 
   for (let day = 0; day < days; day++) {
     const dailyMeals = [];
-    
+
     for (let meal = 0; meal < mealsPerDay; meal++) {
       const availableRecipes = remainingRecipes.filter(
         r => !lastUsedRecipes.has(r.name)
       );
-      
+
       const recipePool = availableRecipes.length > 0 ? availableRecipes : [...remainingRecipes];
       const randomIndex = Math.floor(Math.random() * recipePool.length);
       const selectedRecipe = recipePool[randomIndex];
-      
+
       dailyMeals.push({
         name: selectedRecipe.name,
         recipe: selectedRecipe,
@@ -183,7 +185,7 @@ function simulatePlan() {
         lastUsedRecipes.delete(first);
       }
     }
-    
+
     plan.push(dailyMeals);
   }
 
@@ -194,17 +196,17 @@ function simulatePlan() {
 function showPlanPreview(plan, people, isRealPlan) {
   const container = qs('#m_planPreview');
   if (!container) return;
-  
+
   container.innerHTML = '<h3>Prévia do Plano</h3>';
 
   plan.forEach((dayMeals, dayIndex) => {
     const dayElement = document.createElement('div');
     dayElement.style.marginBottom = '16px';
     dayElement.innerHTML = `<strong>Dia ${dayIndex + 1}</strong>`;
-    
+
     const mealsList = document.createElement('div');
     mealsList.style.marginLeft = '16px';
-    
+
     dayMeals.forEach((meal, mealIndex) => {
       const mealElement = document.createElement('div');
       mealElement.className = 'meal-item' + (meal.isCookingDay ? ' cooking-day' : '');
@@ -218,9 +220,9 @@ function showPlanPreview(plan, people, isRealPlan) {
          ${isRealPlan ? `<button class="btn-ghost" data-day="${dayIndex}" data-meal="${mealIndex}">Trocar</button>` : ''}
        </div>
      `;
-     mealsList.appendChild(mealElement);
+      mealsList.appendChild(mealElement);
     });
-    
+
     dayElement.appendChild(mealsList);
     container.appendChild(dayElement);
   });
@@ -232,7 +234,7 @@ function showPlanPreview(plan, people, isRealPlan) {
     saveButton.innerHTML = '<button id="m_savePlan" class="btn">Salvar Plano</button>';
     container.appendChild(saveButton);
 
-  // 2. Depois o evento do botão Salvar
+    // 2. Depois o evento do botão Salvar
     saveButton.querySelector('#m_savePlan').addEventListener('click', () => {
       window.saveAll();
       closeModal();
@@ -243,15 +245,15 @@ function showPlanPreview(plan, people, isRealPlan) {
     container.addEventListener('click', (e) => {
       const trocarBtn = e.target.closest('.btn-ghost[data-day][data-meal]');
       if (!trocarBtn) return;
-      
+
       const dayIndex = parseInt(trocarBtn.dataset.day);
       const mealIndex = parseInt(trocarBtn.dataset.meal);
-  
+
       // Cria um seletor com todas as receitas
-      let optionsHtml = window.recipes.map(recipe => 
+      let optionsHtml = window.recipes.map(recipe =>
         `<option value="${recipe.name}">${recipe.name}</option>`
       ).join('');
-  
+
       const selectHtml = `
         <div style="margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 4px;">
           <select id="recipeSelect" class="form-control" style="margin-bottom: 10px;">
@@ -261,26 +263,26 @@ function showPlanPreview(plan, people, isRealPlan) {
           <button id="cancelChange" class="btn-ghost" style="margin-left: 5px;">Cancelar</button>
         </div>
       `;
-  
+
       // Mostra o seletor de receitas
       const selectContainer = document.createElement('div');
       selectContainer.style.marginTop = '10px';
       selectContainer.innerHTML = selectHtml;
-  
+
       // Remove qualquer seletor anterior
       const oldSelect = container.querySelector('#recipeSelectContainer');
       if (oldSelect) oldSelect.remove();
-  
+
       // Adiciona o novo seletor após o botão clicado
       trocarBtn.parentNode.insertAdjacentElement('afterend', selectContainer);
       selectContainer.id = 'recipeSelectContainer';
-  
+
       // Adiciona evento ao botão de confirmar
       selectContainer.querySelector('#confirmChange').addEventListener('click', () => {
         const select = selectContainer.querySelector('#recipeSelect');
         const selectedRecipeName = select.value;
         const selectedRecipe = window.recipes.find(r => r.name === selectedRecipeName);
-        
+
         if (selectedRecipe) {
           // Atualiza o plano
           plan[dayIndex][mealIndex] = {
@@ -288,13 +290,13 @@ function showPlanPreview(plan, people, isRealPlan) {
             recipe: selectedRecipe,
             suggested: false
           };
-          
+
           // Atualiza a visualização
           showPlanPreview(plan, people, isRealPlan);
           setAlert('Receita trocada com sucesso!');
         }
       });
-  
+
       // Adiciona evento ao botão de cancelar
       selectContainer.querySelector('#cancelChange').addEventListener('click', () => {
         selectContainer.remove();
@@ -307,7 +309,7 @@ export function showCurrentPlan() {
     return openModal('Plano Atual', '<p>Nenhum plano gerado ainda.</p>');
   }
 
-  const people = 4;
+  const people = window.planMeta?.people || 4;
   const html = `
     <div id="m_currentPlan" style="margin-bottom:16px"></div>
     <div style="display:flex;gap:8px">
@@ -317,7 +319,7 @@ export function showCurrentPlan() {
   `;
 
   openModal('Plano Atual', html);
-  
+
   // Mostra o preview no container correto
   const container = qs('#m_currentPlan');
   if (container) {
@@ -328,10 +330,10 @@ export function showCurrentPlan() {
       const dayElement = document.createElement('div');
       dayElement.style.marginBottom = '16px';
       dayElement.innerHTML = `<strong>Dia ${dayIndex + 1}</strong>`;
-      
+
       const mealsList = document.createElement('div');
       mealsList.style.marginLeft = '16px';
-      
+
       dayMeals.forEach((meal) => {
         const mealElement = document.createElement('div');
         mealElement.style.padding = '4px 0';
@@ -339,7 +341,7 @@ export function showCurrentPlan() {
         mealElement.textContent = recipeName;
         mealsList.appendChild(mealElement);
       });
-      
+
       dayElement.appendChild(mealsList);
       container.appendChild(dayElement);
     });
@@ -349,18 +351,18 @@ export function showCurrentPlan() {
   setTimeout(() => {
     const exportBtn = document.getElementById('m_exportPlan');
     const clearBtn = document.getElementById('m_clearPlan');
-    
+
     if (exportBtn) {
       exportBtn.addEventListener('click', () => {
         const dataStr = JSON.stringify(window.plan, null, 2);
         const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
         const exportName = `plano-${new Date().toISOString().split('T')[0]}.json`;
-        
+
         const linkElement = document.createElement('a');
         linkElement.setAttribute('href', dataUri);
         linkElement.setAttribute('download', exportName);
         linkElement.click();
-        
+
         setAlert('Plano exportado com sucesso!');
       });
     }

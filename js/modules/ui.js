@@ -12,7 +12,7 @@ export function openModal(title, contentHTML) {
   if (!modalBack || !modalContent) initUI();
 
   closeModal();
-  
+
   modalContent.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center">
       <h2 style="margin:0">${title}</h2>
@@ -20,7 +20,7 @@ export function openModal(title, contentHTML) {
     </div>
     <div style="margin-top:12px">${contentHTML}</div>
   `;
-  
+
   modalBack.style.display = 'flex';
   qs('#closeModal')?.addEventListener('click', closeModal);
 }
@@ -30,7 +30,9 @@ export function closeModal() {
   if (modalContent) modalContent.innerHTML = '';
 }
 
-export function setAlert(text, level = 'info') {
+// level: 'info' | 'warn' | 'error' etc
+// duration: milliseconds to keep the alert visible; pass 0 to never auto-remove
+export function setAlert(text, level = 'info', duration = 5000) {
   if (!alertsEl) initUI();
   const colors = { info: '#134e3a', warn: '#b47c00', error: 'crimson' };
   const node = document.createElement('div');
@@ -38,6 +40,21 @@ export function setAlert(text, level = 'info') {
   node.style.marginTop = '6px';
   node.style.color = colors[level] || colors.info;
   alertsEl.prepend(node);
+
+  // auto-dismiss (duration=0 disables)
+  if (duration > 0) {
+    setTimeout(() => {
+      if (node && node.parentNode) {
+        node.remove();
+      }
+    }, duration);
+  }
+}
+
+// optional helper for clearing all alerts at once
+export function clearAlerts() {
+  if (!alertsEl) initUI();
+  alertsEl.innerHTML = '';
 }
 
 export function showLoading() {
