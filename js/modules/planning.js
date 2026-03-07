@@ -25,10 +25,18 @@ function getFrequencyPercentage(level) {
 function applyPlanToInventory(plan, people) {
   if (!plan || !window.inventory) return;
 
+  // Rastreia quais receitas já foram descontadas (para evitar duplicação em receitas multi-dia)
+  const alreadyDeducted = new Set();
+
   // Itera por cada dia do plano
   plan.forEach((dayMeals) => {
     dayMeals.forEach((meal) => {
       if (!meal.recipe || !meal.recipe.ingredients) return;
+
+      // Evita descontar a mesma receita múltiplas vezes (receitas que duram vários dias)
+      const recipeKey = meal.recipe.name;
+      if (alreadyDeducted.has(recipeKey)) return;
+      alreadyDeducted.add(recipeKey);
 
       // Calcula a escala proporcional de porções
       const recipeServings = meal.recipe.servings || 4;
@@ -272,16 +280,9 @@ function showPlanPreview(plan, people, isRealPlan) {
          ${isRealPlan ? `<button class="btn-ghost" data-day="${dayIndex}" data-meal="${mealIndex}">Trocar</button>` : ''}
        </div>
        <div class="recipe-ingredients" style="margin-top: 8px; font-size: 0.85em; color: #666;">
-         ${meal.recipe && meal.recipe.ingredients && meal.recipe.ingredients.length > 0 ?
-          meal.recipe.ingredients.slice(0, 3).map(ing =>
-            `${ing.name}: ${ing.qty}${ing.unit}`
-          ).join(' • ') + (meal.recipe.ingredients.length > 3 ? ` • +${meal.recipe.ingredients.length - 3} mais` : '') :
-          'Clique em "Ver detalhes" para ver os ingredientes'
-        }
+         <!-- resumo de quantidades removido conforme solicitado -->
        </div>
-       <button class="btn-ghost-small" data-recipe-details="${dayIndex}-${mealIndex}" style="margin-top: 4px; font-size: 0.8em; padding: 2px 6px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; color: #666;">
-         Ver detalhes
-       </button>
+
      `;
       mealsList.appendChild(mealElement);
     });
@@ -369,26 +370,7 @@ function showPlanPreview(plan, people, isRealPlan) {
       });
     });
 
-    // 4. Evento do botão "Ver detalhes"
-    container.addEventListener('click', (e) => {
-      const detailsBtn = e.target.closest('.btn-ghost-small[data-recipe-details]');
-      if (!detailsBtn) return;
-
-      const [dayIndex, mealIndex] = detailsBtn.dataset.recipeDetails.split('-').map(Number);
-      const meal = plan[dayIndex][mealIndex];
-
-      if (meal && meal.recipe) {
-        showRecipeDetails(meal.recipe, people);
-      } else {
-        // Se não tem recipe completo, tenta encontrar pela window.recipes
-        const recipe = window.recipes?.find(r => r.name === meal.name);
-        if (recipe) {
-          showRecipeDetails(recipe, people);
-        } else {
-          setAlert('Receita não encontrada', 'error');
-        }
-      }
-    });
+    // (removido) Não há mais botão "Ver detalhes" no plano, portanto não há evento correspondente.
   }
 }
 export function showCurrentPlan() {
@@ -465,39 +447,4 @@ export function showCurrentPlan() {
       });
     }
   }, 100);
-}
-
-/**
- * Mostra os detalhes completos de uma receita no planning
- * @param {Object} recipe - Receita a ser exibida
- * @param {number} people - Número de pessoas
- */
-function showRecipeDetails(recipe, people) {
-  if (!recipe || !recipe.ingredients) return;
-
-  const portionScale = people / (recipe.servings || 4);
-
-  const ingredientsHtml = recipe.ingredients
-    .map(ing => {
-      const scaledQty = ing.qty * portionScale;
-      return `<li>${ing.name}: ${scaledQty.toFixed(2)}${ing.unit}</li>`;
-    })
-    .join('');
-
-  const html = `
-    <div style="padding: 16px;">
-      <h3 style="margin-bottom: 16px;">${recipe.name}</h3>
-      <div style="margin-bottom: 16px;">
-        <strong>Porções:</strong> ${recipe.servings || 4} (escalado para ${people} pessoas)
-      </div>
-      <div>
-        <strong>Ingredientes:</strong>
-        <ul style="margin-top: 8px; padding-left: 20px;">
-          ${ingredientsHtml}
-        </ul>
-      </div>
-    </div>
-  `;
-
-  openModal(`Detalhes: ${recipe.name}`, html);
 }

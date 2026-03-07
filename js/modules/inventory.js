@@ -2,7 +2,7 @@
 import { qs, parseLine } from './utils.js';
 import { openModal, setAlert, clearAlerts } from './ui.js';
 import { barcodeScanner } from './barcode.js';
-import { normalizeUnit, getStandardUnits } from './unitNormalizer.js';
+import { normalizeUnit } from './unitNormalizer.js';
 let currentSearchTerm = '';
 
 export function showInventory() {
@@ -32,7 +32,7 @@ export function showInventory() {
       <select id="m_itemCategory" style="flex: 3; min-width: 200px; padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0; background-color: white;">
         <option value="">Selecione a categoria</option>
         <option value="hortifruti">Hortifrúti</option>
-        <option value="carnes">Carnes, Aves e Ovo</option>
+        <option value="carnes">Carnes, Aves, Ovo e Peixes</option>
         <option value="laticinios">Laticínios e Frios</option>
         <option value="graos">Grãos e Cereais</option>
         <option value="padaria">Padaria e Matinais</option>
@@ -138,7 +138,7 @@ function renderList(searchTerm = '') {
 
     const categoryName = {
       'hortifruti': 'Hortifrúti',
-      'carnes': 'Carnes, Aves e Ovo',
+      'carnes': 'Carnes, Aves, Ovo e Peixes',
       'laticinios': 'Laticínios e Frios',
       'graos': 'Grãos e Cereais',
       'padaria': 'Padaria e Matinais',
