@@ -1,21 +1,24 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cardápio da Casa</title>
+  <title>Mamão com Açúcar</title>
   <link rel="manifest" href="cardapio_manifest.json" />
   <meta name="theme-color" content="#1F6F3B" />
   <!-- Redireciona para a versão PWA principal -->
   <meta http-equiv="refresh" content="0;url=cardapio_casa_pwa.html" />
 </head>
+
 <body>
   <p>Redirecionando para <a href="cardapio_casa_pwa.html">CardápioCasa — PWA</a>…</p>
   <script>
     // fallback: se o refresh não funcionar, navega via JS
     if (location.pathname.endsWith('/') || location.pathname.endsWith('index.html')) {
-      try { location.replace('cardapio_casa_pwa.html'); } catch(e) {}
+      try { location.replace('cardapio_casa_pwa.html'); } catch (e) { }
     }
   </script>
 </body>
+
 </html>

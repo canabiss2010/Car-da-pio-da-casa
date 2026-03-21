@@ -1,6 +1,6 @@
 {
-  "name": "Cardápio da Casa",
-  "short_name": "Cardápio",
+  "name": "Mamão com Açúcar",
+  "short_name": "Cardápio da casa",
   "start_url": "./cardapio_casa_pwa.html",
   "display": "standalone",
   "background_color": "#F7F6F2",
