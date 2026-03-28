@@ -2,7 +2,8 @@
 export const STORAGE_KEYS = {
   INVENTORY: 'cc_inv_pwa',
   RECIPES: 'cc_rec_pwa',
-  PLAN: 'cc_plan_pwa'
+  PLAN: 'cc_plan_pwa',
+  USER_PROFILE: 'cc_user_pwa'
 };
 
 // Densidades para conversão de unidades

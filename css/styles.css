@@ -172,6 +172,48 @@ button {
   cursor: pointer
 }
 
+.entry-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid rgba(31, 111, 59, 0.1);
+  padding: 14px;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+}
+
+.entry-card h2 {
+  margin-top: 0;
+  color: var(--accent);
+}
+
+.entry-actions {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.entry-block {
+  background: #f8fff8;
+  border: 1px solid rgba(31, 111, 59, 0.12);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.entry-block h3 {
+  margin: 0 0 8px;
+  color: var(--accent);
+}
+
+#userStatus,
+#logoutBtn {
+  margin-top: 6px;
+}
+
+@media (min-width: 650px) {
+  .entry-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 .btn-ghost {
   background: transparent;
   border: 1px solid rgba(8, 20, 25, 0.06);

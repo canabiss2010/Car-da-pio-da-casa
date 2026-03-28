@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Mamão com Açúcar</title> — PWA</title>
+  <title>Mamão com Açúcar - PWA</title>
   <link rel="stylesheet" href="css/styles.css">
   <link rel="manifest" href="cardapio_manifest.json">
   <link rel="icon" type="image/svg+xml"
@@ -13,13 +13,61 @@
 </head>
 
 <body>
-  <div class="wrap">
+  <div id="createScreen" class="wrap" style="display:none;">
+    <header>
+      <div class="logo"></div>
+      <div>
+        <h1>MamãocomAçúcar</h1>
+        <p class="subtitle">Crie seu cardápio compartilhado</p>
+      </div>
+    </header>
+
+    <div class="entry-card">
+      <h2>Comece criando seu cardápio</h2>
+      <p>Dê um nome ao seu cardápio e seu nome pessoal.</p>
+
+      <form id="createForm">
+        <label>Nome do cardápio</label>
+        <input id="menuName" type="text" placeholder="Ex: Cardápio dos Panzarella" required>
+        <label>Seu nome</label>
+        <input id="creatorName" type="text" placeholder="Nome" required>
+        <button type="submit">Criar cardápio</button>
+      </form>
+
+      <p class="small">Após criar, você poderá compartilhar o link com sua família.</p>
+    </div>
+  </div>
+
+  <div id="joinScreen" class="wrap" style="display:none;">
+    <header>
+      <div class="logo"></div>
+      <div>
+        <h1>MamãocomAçúcar</h1>
+        <p class="subtitle">Entre no cardápio compartilhado</p>
+      </div>
+    </header>
+
+    <div class="entry-card">
+      <h2>Entre no cardápio</h2>
+      <p id="joinMessage">Você foi convidado para participar. Digite seu nome para entrar.</p>
+
+      <form id="joinForm">
+        <label>Seu nome</label>
+        <input id="joinName" type="text" placeholder="Nome" required>
+        <button type="submit">Entrar</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="wrap" id="appScreen" style="display:none;">
     <header>
       <div class="logo"></div>
       <div>
         <h1>MamãocomAçúcar</h1>
         <p class="subtitle">Planejamento rápido para sua casa</p>
+        <p id="userStatus" class="subtitle" style="margin-top:4px;color:#2ea47a"></p>
       </div>
+      <button id="logoutBtn" class="btn-ghost" style="height:fit-content;align-self:flex-start;display:none;">Sair</button>
     </header>
 
     <div class="grid" id="mainGrid">
@@ -38,6 +86,14 @@
       <div class="block" id="b-current" data-key="current">
         <h3>Plano Atual</h3>
         <p>Ver plano gerado</p>
+      </div>
+      <div class="block full" id="b-shopping" data-key="shopping">
+        <h3>Lista de Compras</h3>
+        <p>Ver itens necessários para o plano</p>
+      </div>
+      <div class="block full" id="b-share" data-key="share">
+        <h3>Compartilhar seu Cardápio</h3>
+        <p>Envie o link para sua família</p>
       </div>
     </div>
 
@@ -59,8 +115,7 @@
     </div>
   </div>
 
-  <script src="./js/lib/zxing.min.js"></script>
-  <script type="module" src="./js/app.js" defer></script>
+  <script type="module" src="./js/app.js?v=20260328" defer></script>
 </body>
 
 </html>
