@@ -42,6 +42,56 @@ function groupItemKey(baseKey) {
   return `${baseKey}_${code}`;
 }
 
+function normalizeMenuName(name) {
+  return String(name || '').trim().toLowerCase();
+}
+
+function getGroupMetaStore() {
+  return validateJSON(localStorage.getItem(STORAGE_KEYS.GROUP_META)) || {};
+}
+
+function saveGroupMetaStore(store) {
+  localStorage.setItem(STORAGE_KEYS.GROUP_META, JSON.stringify(store));
+}
+
+function getGroupMeta(groupId) {
+  const store = getGroupMetaStore();
+  return store[String(groupId || '').trim().toUpperCase()] || null;
+}
+
+function groupExists(groupId) {
+  return !!getGroupMeta(groupId);
+}
+
+function menuNameExists(menuName) {
+  const normalized = normalizeMenuName(menuName);
+  if (!normalized) return false;
+  return Object.values(getGroupMetaStore()).some(meta => normalizeMenuName(meta.menuName) === normalized);
+}
+
+function findGroupIdByMenuName(menuName) {
+  const normalized = normalizeMenuName(menuName);
+  if (!normalized) return null;
+  const store = getGroupMetaStore();
+  for (const [groupId, meta] of Object.entries(store)) {
+    if (meta && normalizeMenuName(meta.menuName) === normalized) {
+      return groupId;
+    }
+  }
+  return null;
+}
+
+function addGroupMeta(groupId, menuName, creatorName) {
+  const store = getGroupMetaStore();
+  const key = String(groupId).trim().toUpperCase();
+  store[key] = {
+    menuName: String(menuName).trim(),
+    creatorName: String(creatorName || '').trim(),
+    createdAt: new Date().toISOString()
+  };
+  saveGroupMetaStore(store);
+}
+
 function loadInitialData() {
   try {
     // Verificar se há perfil antigo com 'code' em vez de 'groupId'
@@ -60,12 +110,40 @@ function loadInitialData() {
 
     const urlParams = new URLSearchParams(window.location.search);
     const groupId = urlParams.get('group');
-    console.log('URL params:', groupId);
+    const userName = urlParams.get('user');
+    console.log('URL params:', { group: groupId, user: userName });
 
     if (groupId) {
-      // Entrada via link compartilhado
-      console.log('Mostrando tela de entrada para grupo:', groupId);
-      showJoinScreen(groupId);
+      const normalizedGroupId = String(groupId).trim().toUpperCase();
+      if (!groupExists(normalizedGroupId)) {
+        UI.setAlert('Grupo de cardápio inválido ou inexistente.', 'error', 0);
+        showCreateScreen();
+        return;
+      }
+
+      const profile = validateJSON(localStorage.getItem(STORAGE_KEYS.USER_PROFILE));
+      if (profile && profile.groupId && String(profile.groupId).trim().toUpperCase() === normalizedGroupId) {
+        window.user = profile;
+        window.activeGroupCode = profile.groupId;
+        showAppScreen(profile);
+        loadGroupData();
+        return;
+      }
+
+      if (userName) {
+        const name = String(userName).trim();
+        if (name) {
+          const meta = getGroupMeta(normalizedGroupId);
+          if (meta) {
+            setUserProfile(name, normalizedGroupId, meta.menuName, false);
+            window.history.replaceState({}, document.title, window.location.pathname + `?group=${normalizedGroupId}`);
+            return;
+          }
+        }
+      }
+
+      console.log('Mostrando tela de entrada para grupo:', normalizedGroupId);
+      showJoinScreen(normalizedGroupId);
     } else {
       // Verificar se já há perfil salvo
       const profile = validateJSON(localStorage.getItem(STORAGE_KEYS.USER_PROFILE));
@@ -92,6 +170,7 @@ function loadGroupData() {
   window.inventory = validateJSON(localStorage.getItem(groupItemKey(STORAGE_KEYS.INVENTORY))) || [];
   window.recipes = validateJSON(localStorage.getItem(groupItemKey(STORAGE_KEYS.RECIPES))) || [];
   window.plan = validateJSON(localStorage.getItem(groupItemKey(STORAGE_KEYS.PLAN))) || [];
+  window.shoppingList = validateJSON(localStorage.getItem(groupItemKey(STORAGE_KEYS.SHOPPING_LIST))) || [];
 
   // Migração de versão (se necessário)
   if (window.recipes.length > 0) {
@@ -109,6 +188,7 @@ function saveAll() {
     localStorage.setItem(groupItemKey(STORAGE_KEYS.INVENTORY), JSON.stringify(window.inventory));
     localStorage.setItem(groupItemKey(STORAGE_KEYS.RECIPES), JSON.stringify(window.recipes));
     localStorage.setItem(groupItemKey(STORAGE_KEYS.PLAN), JSON.stringify(window.plan));
+    localStorage.setItem(groupItemKey(STORAGE_KEYS.SHOPPING_LIST), JSON.stringify(window.shoppingList || []));
   } catch (e) {
     console.error('Erro ao salvar dados:', e);
     UI.setAlert('Erro ao salvar dados. Verifique o espaço de armazenamento.', 'error', 0);
@@ -156,10 +236,22 @@ function showCreateScreen() {
   if (createForm && !createForm.dataset.bound) {
     createForm.addEventListener('submit', (event) => {
       event.preventDefault();
-      const menuName = qs('#menuName').value;
-      const creatorName = qs('#creatorName').value;
+      const menuName = qs('#menuName').value.trim();
+      const creatorName = qs('#creatorName').value.trim();
+
+      if (!menuName || !creatorName) {
+        UI.setAlert('Preencha o nome do cardápio e o seu nome.', 'warn', 4000);
+        return;
+      }
+
+      if (menuNameExists(menuName)) {
+        UI.setAlert('Esse nome de cardápio já está em uso. Escolha outro.', 'error', 0);
+        return;
+      }
+
       const groupId = `GRP-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
       console.log('Criando cardápio:', menuName, creatorName, groupId);
+      addGroupMeta(groupId, menuName, creatorName);
       setUserProfile(creatorName, groupId, menuName, true);
     });
     createForm.dataset.bound = 'true';
@@ -190,9 +282,21 @@ function showJoinScreen(groupId) {
   if (joinForm && !joinForm.dataset.bound) {
     joinForm.addEventListener('submit', (event) => {
       event.preventDefault();
-      const name = qs('#joinName').value;
+      const name = qs('#joinName').value.trim();
+      const meta = getGroupMeta(groupId);
+
+      if (!name) {
+        UI.setAlert('Digite seu nome para entrar no cardápio.', 'warn', 4000);
+        return;
+      }
+
+      if (!meta) {
+        UI.setAlert('Código inválido. Não foi possível entrar no cardápio.', 'error', 0);
+        return;
+      }
+
       console.log('Entrando no cardápio:', name, groupId);
-      setUserProfile(name, groupId, null, false);
+      setUserProfile(name, groupId, meta.menuName, false);
     });
     joinForm.dataset.bound = 'true';
   }
@@ -285,8 +389,8 @@ function setupEventListeners() {
       button.addEventListener('click', function handleClick() {
         const action = selector === '#b-current' ? 'showCurrentPlan' :
           selector === '#b-create' ? 'showCreatePlan' :
-          selector === '#b-shopping' ? 'showShoppingList' :
-            selector === '#b-rec' ? 'showRecipes' : 'showInventory';
+            selector === '#b-shopping' ? 'showShoppingList' :
+              selector === '#b-rec' ? 'showRecipes' : 'showInventory';
 
         loadModule(modulePath, (module) => {
           if (typeof module[action] === 'function') {

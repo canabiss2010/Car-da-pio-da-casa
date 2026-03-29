@@ -106,7 +106,8 @@ h1 {
 }
 
 .full {
-  grid-column: 1/-1
+  grid-column: 1/-1;
+  min-height: 64px;
 }
 
 .alerts {
@@ -177,7 +178,7 @@ button {
   border-radius: var(--radius);
   border: 1px solid rgba(31, 111, 59, 0.1);
   padding: 14px;
-  box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
 }
 
 .entry-card h2 {
@@ -314,6 +315,10 @@ footer {
 
   .block {
     min-height: 110px
+  }
+
+  .full {
+    min-height: 64px;
   }
 
   .wrap {

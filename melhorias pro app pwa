@@ -9,50 +9,19 @@ removeFromShoppingList(productId): Remove item da lista
 clearShoppingList(): Limpa a lista de compras
 addMissingToShoppingList(): Adiciona itens em falta automaticamente
 
-BLOCO DA DISPENSA
-HOJE
-1- adicionar um modal pra pessao confirmar se quer deletar o produto
-. Gerenciamento de Produtos
-updateProduct(id, updateData): Atualiza um produto existente
-. Estoque
-getInventory(): Lista todos os itens em estoque
-addToStock(productId, amount, bestBeforeDate, price): Adiciona itens ao estoque
-consumeProduct(productId, amount, spoiled = false): Consome itens do estoque
-inventoryProduct(productId, newAmount): Ajusta manualmente o estoque
-getStockEntries(): Mostra todas as entradas de estoque
-. Produtos
-getProductGroups(): Categorias de produtos
-
-BLOCO DAS RECEITAS
-getRecipes(): Lista todas as receitas
-getRecipe(id): Busca uma receita específica
-getRecipePositions(recipeId): Ingredientes de uma receita
-getRecipeFulfillment(recipeId): Verifica se pode fazer uma receita com o estoque atual
-consumeRecipe(recipeId, servings = 1): Consome os ingredientes da receita do estoque
+- adicionar um modal pra pessao confirmar se quer deletar o produto
+- Verificar se pode fazer uma receita com o estoque atual
+- Consome os ingredientes da receita do estoque
 - ter a possibilidade de uma receitas estar em 2 categorias
-
-BLOCO DE CRIAR PLANO/PLANO ATUAL
-getMealPlan(): Mostra o planejamento de refeições
-addToMealPlan(day, recipeId, servings): Adiciona uma refeição ao plano
-getMealPlanWeek(date): Pega o plano da semana de uma data específica
-generateShoppingListFromMealPlan(): Gera lista de compras baseada no planejamento
-- adiconar/destacar qual dia tem q cozinhar a receita e ter uma funcao/botao pra escolher que só cozinhara para o almoco, de forma q dure pra janta tambem 
+- Montar o plano da semana com as datas dos dias seguintes
+- Gerar lista de compras baseada no planejamento
+- adiconar/destacar qual dia tem q cozinhar a receita 
+- ter uma funcao/botao pra escolher que só cozinhara para o almoco, de forma q dure pra janta tambem 
 - tem q explicar oq significa a sujestão em laranja 
-
-
-ADICIONAIS
-- Ter valores padroes pra unidades de medida
-getQuantityUnits(): Lista unidades de medida (kg, g, ml, etc)
-getQuantityUnitConversions(): Mostra conversões entre unidades
-- os avisos somem depois de um tempo
-- colocar um corretor ortografico
 - melhorar o visual, com cores, subtitulos e deixar tudo padrão (ULTIMA COISA)
 
-organizar a tela pra adicionar pelo leitor de codigo de barras (colocar a quantia de pacotes/categoria)
-fazer a barra depesquisa e o filtro funcionarem (por nome e por categoria)
 
-HOJEEEE
-escrever q nos ingredientes da receitas tem q colocar as medidas/ organizar visualmente pra ficar facil
+
 revisar como as receitas sao selecionadas no criador de plano (porcoes)
 
 

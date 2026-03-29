@@ -120,9 +120,6 @@ function renderRecipeList() {
           <div style="display:flex;justify-content:space-between;align-items:center">
             <strong>${recipe.name}</strong>
           </div>
-          <div class="small" style="margin-top:4px">
-            ${recipe.servings || 4} porções • ${freqInfo.label}
-          </div>
           <div style="display:flex;gap:8px;margin-top:8px">
             <button data-idx="${getRecipeIndex(recipe)}" data-action="view" class="btn-ghost" style="flex:1">
               Ver detalhes

@@ -3,12 +3,14 @@ export const STORAGE_KEYS = {
   INVENTORY: 'cc_inv_pwa',
   RECIPES: 'cc_rec_pwa',
   PLAN: 'cc_plan_pwa',
-  USER_PROFILE: 'cc_user_pwa'
+  SHOPPING_LIST: 'cc_shopping_pwa',
+  USER_PROFILE: 'cc_user_pwa',
+  GROUP_META: 'cc_group_meta_pwa'
 };
 
 // Densidades para conversão de unidades
 export const DENSITIES = {
-  "água": 1, "agua": 1, "leite": 1, "oleo": 0.92, "óleo": 0.92, 
+  "água": 1, "agua": 1, "leite": 1, "oleo": 0.92, "óleo": 0.92,
   "acucar": 0.85, "açúcar": 0.85, "farinha": 0.53, "farinha de trigo": 0.53,
   "arroz": 0.85, "feijao": 0.7, "carne moida": 0.95, "carne moída": 0.95,
   "batata": 0.65, "tomate": 0.95, "aipim": 0.6, "mandioquinha": 0.6,
@@ -20,12 +22,12 @@ export const DENSITIES = {
 
 // Conversões padrão
 export const DEFAULTS = {
-  conv: { 
-    kg_to_g: 1000, 
-    g_to_mg: 1000, 
-    l_to_ml: 1000, 
-    cup_ml: 240, 
-    tbsp_ml: 15, 
-    tsp_ml: 5 
+  conv: {
+    kg_to_g: 1000,
+    g_to_mg: 1000,
+    l_to_ml: 1000,
+    cup_ml: 240,
+    tbsp_ml: 15,
+    tsp_ml: 5
   }
 };

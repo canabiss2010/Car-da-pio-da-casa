@@ -2,6 +2,13 @@
 import { qs } from './utils.js';
 import { openModal, closeModal, setAlert } from './ui.js';
 import { normalizeUnit } from './unitNormalizer.js';
+import {
+  showShoppingList,
+  getShoppingList,
+  addToShoppingList,
+  removeFromShoppingList,
+  clearShoppingList
+} from './shoppingList.js';
 
 // Escala de frequência
 const frequencyLevels = [
@@ -199,6 +206,17 @@ function generatePlan() {
     }
 
     plan.push(dailyMeals);
+  }
+
+  const missingItems = getPlanMissingItems(plan, people);
+  if (missingItems.length > 0) {
+    showPlanPreview(plan, people, false);
+    setAlert(
+      `Estoque insuficiente. Faltam: ${missingItems.map(item => `${item.name} (${item.qty.toFixed(2)} ${item.unit})`).join(', ')}`,
+      'error',
+      0
+    );
+    return;
   }
 
   window.plan = plan;
@@ -449,70 +467,10 @@ export function showCurrentPlan() {
   }, 100);
 }
 
-export function showShoppingList() {
-  if (!window.plan || window.plan.length === 0) {
-    setAlert('Gere um plano primeiro para ver a lista de compras.', 'warn', 4000);
-    return;
-  }
-
-  const shoppingList = {};
-  const people = window.planMeta?.people || 4;
-
-  // Coleta todos os ingredientes necessários do plano
-  window.plan.forEach(dayMeals => {
-    dayMeals.forEach(meal => {
-      if (meal.recipe && meal.recipe.ingredients) {
-        const recipeServings = meal.recipe.servings || 4;
-        const portionScale = people / recipeServings;
-
-        meal.recipe.ingredients.forEach(ing => {
-          const key = `${ing.name.toLowerCase()}_${ing.unit}`;
-          const qty = ing.qty * portionScale;
-
-          if (shoppingList[key]) {
-            shoppingList[key].qty += qty;
-          } else {
-            shoppingList[key] = {
-              name: ing.name,
-              unit: ing.unit,
-              qty: qty
-            };
-          }
-        });
-      }
-    });
-  });
-
-  // Subtrai o que já tem no estoque
-  Object.values(shoppingList).forEach(item => {
-    const inventoryItem = window.inventory?.find(inv =>
-      inv.name.toLowerCase() === item.name.toLowerCase() &&
-      inv.unit === item.unit
-    );
-
-    if (inventoryItem) {
-      item.qty = Math.max(0, item.qty - inventoryItem.qty);
-    }
-  });
-
-  // Filtra itens com quantidade > 0
-  const neededItems = Object.values(shoppingList).filter(item => item.qty > 0);
-
-  const html = `
-    <div class="small" style="margin-bottom:16px">
-      Itens necessários para o plano atual (já descontado o estoque).
-    </div>
-    ${neededItems.length === 0 ? '<p>Nenhum item necessário no momento.</p>' :
-      `<div class="list">
-        ${neededItems.map(item => `
-          <div class="item">
-            <span>${item.name.charAt(0).toUpperCase() + item.name.slice(1)}</span>
-            <span>${item.qty.toFixed(2)} ${item.unit}</span>
-          </div>
-        `).join('')}
-      </div>`
-    }
-  `;
-
-  openModal('Lista de Compras', html);
-}
+export {
+  showShoppingList,
+  getShoppingList,
+  addToShoppingList,
+  removeFromShoppingList,
+  clearShoppingList
+} from './shoppingList.js';

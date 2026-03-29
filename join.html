@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>Entrar em Cardápio</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <meta name="theme-color" content="#1F6F3B" />
+</head>
+
+<body>
+    <div class="wrap" style="max-width:520px;margin:36px auto;">
+        <header>
+            <div class="logo"></div>
+            <div>
+                <h1>MamãocomAçúcar</h1>
+                <p class="subtitle">Entrar em um cardápio já criado</p>
+            </div>
+        </header>
+
+        <div class="entry-card">
+            <h2>Já existe um cardápio?</h2>
+            <p>Digite o nome do cardápio cadastrado e seu nome para abrir os dados salvos.</p>
+
+            <form id="joinExistingForm">
+                <label>Nome do cardápio</label>
+                <input id="existingMenuName" type="text" placeholder="Ex: Cardápio dos Panzarella" required>
+                <label>Seu nome</label>
+                <input id="existingUserName" type="text" placeholder="Nome" required>
+                <button type="submit">Entrar no cardápio</button>
+            </form>
+
+            <div id="joinNotice" class="small" style="margin-top:12px;color:#b47c00"></div>
+            <p class="small" style="margin-top:16px">
+                <a href="cardapio_casa_pwa.html">Voltar para criar um novo cardápio</a>
+            </p>
+        </div>
+    </div>
+
+    <script type="module" src="js/join.js"></script>
+</body>
+
+</html>

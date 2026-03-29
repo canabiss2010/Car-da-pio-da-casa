@@ -30,10 +30,26 @@ export function closeModal() {
   if (modalContent) modalContent.innerHTML = '';
 }
 
+const alertPlaceholderText = 'Você não tem novos avisos.';
+
+function showAlertPlaceholder() {
+  if (!alertsEl) initUI();
+  alertsEl.textContent = alertPlaceholderText;
+}
+
+function clearAlertPlaceholder() {
+  if (!alertsEl) initUI();
+  if (alertsEl.textContent.trim() === alertPlaceholderText) {
+    alertsEl.textContent = '';
+  }
+}
+
 // level: 'info' | 'warn' | 'error' etc
 // duration: milliseconds to keep the alert visible; pass 0 to never auto-remove
 export function setAlert(text, level = 'info', duration = 5000) {
   if (!alertsEl) initUI();
+  clearAlertPlaceholder();
+
   const colors = { info: '#134e3a', warn: '#b47c00', error: 'crimson' };
   const node = document.createElement('div');
   node.textContent = text;
@@ -46,6 +62,9 @@ export function setAlert(text, level = 'info', duration = 5000) {
     setTimeout(() => {
       if (node && node.parentNode) {
         node.remove();
+        if (alertsEl.childElementCount === 0 && alertsEl.textContent.trim() === '') {
+          showAlertPlaceholder();
+        }
       }
     }, duration);
   }
@@ -54,7 +73,7 @@ export function setAlert(text, level = 'info', duration = 5000) {
 // optional helper for clearing all alerts at once
 export function clearAlerts() {
   if (!alertsEl) initUI();
-  alertsEl.innerHTML = '';
+  showAlertPlaceholder();
 }
 
 export function showLoading() {
