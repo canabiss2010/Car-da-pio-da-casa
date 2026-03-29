@@ -1,2 +1,0 @@
-ALTER TABLE meal_plan
-ADD done TINYINT NOT NULL DEFAULT 0 CHECK(done IN (0, 1));
