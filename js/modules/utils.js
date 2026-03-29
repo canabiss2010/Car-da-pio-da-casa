@@ -54,7 +54,10 @@ export function validateJSON(data, defaultReturn = []) {
   try {
     if (!data || data === 'null' || data === 'undefined') return defaultReturn;
     const parsed = JSON.parse(data);
-    return Array.isArray(parsed) ? parsed : defaultReturn;
+    if (parsed && typeof parsed === 'object') {
+      return parsed;
+    }
+    return defaultReturn;
   } catch (e) {
     console.warn('Dados corrompidos, usando padrão:', e);
     return defaultReturn;

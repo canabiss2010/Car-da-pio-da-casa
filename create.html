@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>Criar Cardápio</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <meta name="theme-color" content="#1F6F3B" />
+</head>
+
+<body>
+    <div class="wrap" style="max-width:520px;margin:36px auto;">
+        <header>
+            <div class="logo"></div>
+            <div>
+                <h1>MamãocomAçúcar</h1>
+                <p class="subtitle">Crie seu cardápio compartilhado</p>
+            </div>
+        </header>
+
+        <div class="entry-card">
+            <h2>Comece criando seu cardápio</h2>
+            <p>Dê um nome ao seu cardápio e seu nome pessoal.</p>
+
+            <form id="createForm">
+                <label>Nome do cardápio</label>
+                <input id="menuName" type="text" placeholder="Ex: Cardápio dos Panzarella" required>
+                <label>Seu nome</label>
+                <input id="creatorName" type="text" placeholder="Nome" required>
+                <button type="submit">Criar cardápio</button>
+            </form>
+
+            <p class="small">Após criar, você poderá compartilhar o link com sua família.</p>
+            <p class="small" style="margin-top:12px">
+                <a href="join.html" class="btn-ghost"
+                    style="display:inline-block;padding:10px 16px;margin-top:8px;text-decoration:none;">Já tenho um
+                    cardápio</a>
+            </p>
+        </div>
+    </div>
+
+    <script type="module" src="./js/create.js" defer></script>
+</body>
+
+</html>

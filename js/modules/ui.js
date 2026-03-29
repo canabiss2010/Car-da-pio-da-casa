@@ -6,6 +6,14 @@ export function initUI() {
   modalBack = qs('#modalBack');
   modalContent = qs('#modalContent');
   alertsEl = qs('#alerts');
+
+  if (!alertsEl && document.body) {
+    alertsEl = document.createElement('div');
+    alertsEl.id = 'alerts';
+    alertsEl.style.margin = '16px';
+    alertsEl.style.color = '#134e3a';
+    document.body.prepend(alertsEl);
+  }
 }
 
 export function openModal(title, contentHTML) {

@@ -26,13 +26,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('✅ App totalmente inicializado!');
   } catch (error) {
     console.error('❌ Erro na inicialização:', error);
-    // Mostrar tela de criação como fallback
-    console.log('🔄 Fallback: mostrando tela de criação');
-    document.querySelectorAll('.wrap').forEach(el => el.style.display = 'none');
+    console.log('🔄 Fallback: redirecionando para a página de criação');
     const createScreen = document.getElementById('createScreen');
     if (createScreen) {
+      document.querySelectorAll('.wrap').forEach(el => el.style.display = 'none');
       createScreen.style.display = 'block';
       console.log('✅ Tela de criação mostrada como fallback');
+    } else {
+      window.location.replace('create.html');
     }
   }
 });
@@ -113,20 +114,22 @@ function loadInitialData() {
     const userName = urlParams.get('user');
     console.log('URL params:', { group: groupId, user: userName });
 
+    const profile = validateJSON(localStorage.getItem(STORAGE_KEYS.USER_PROFILE));
+    console.log('USER_PROFILE lido do localStorage:', localStorage.getItem(STORAGE_KEYS.USER_PROFILE));
+    if (profile && profile.name && profile.groupId) {
+      console.log('Perfil encontrado, carregando app:', profile);
+      window.user = profile;
+      window.activeGroupCode = profile.groupId;
+      showAppScreen(profile);
+      loadGroupData();
+      return;
+    }
+
     if (groupId) {
       const normalizedGroupId = String(groupId).trim().toUpperCase();
       if (!groupExists(normalizedGroupId)) {
         UI.setAlert('Grupo de cardápio inválido ou inexistente.', 'error', 0);
-        showCreateScreen();
-        return;
-      }
-
-      const profile = validateJSON(localStorage.getItem(STORAGE_KEYS.USER_PROFILE));
-      if (profile && profile.groupId && String(profile.groupId).trim().toUpperCase() === normalizedGroupId) {
-        window.user = profile;
-        window.activeGroupCode = profile.groupId;
-        showAppScreen(profile);
-        loadGroupData();
+        window.location.replace('create.html');
         return;
       }
 
@@ -142,27 +145,15 @@ function loadInitialData() {
         }
       }
 
-      console.log('Mostrando tela de entrada para grupo:', normalizedGroupId);
-      showJoinScreen(normalizedGroupId);
-    } else {
-      // Verificar se já há perfil salvo
-      const profile = validateJSON(localStorage.getItem(STORAGE_KEYS.USER_PROFILE));
-      if (profile && profile.name && profile.groupId) {
-        console.log('Perfil encontrado, carregando app:', profile);
-        window.user = profile;
-        window.activeGroupCode = profile.groupId;
-        showAppScreen(profile);
-        loadGroupData();
-      } else {
-        // Acesso direto - mostrar criação
-        console.log('Mostrando tela de criação');
-        showCreateScreen();
-      }
+      window.location.replace(`join.html?group=${encodeURIComponent(normalizedGroupId)}`);
+      return;
     }
+
+    console.log('Sem perfil local, redirecionando para create.html');
+    window.location.replace('create.html');
   } catch (error) {
     console.error('Erro em loadInitialData:', error);
-    // Fallback: mostrar criação
-    showCreateScreen();
+    window.location.replace('create.html');
   }
 }
 
@@ -327,19 +318,21 @@ function handleShare() {
     return;
   }
 
-  const shareUrl = `${window.location.origin}${window.location.pathname}?group=${window.user.groupId}`;
-  console.log('Compartilhando URL:', shareUrl);
+  const shareUrl = new URL('join.html', window.location.href);
+  shareUrl.searchParams.set('group', window.user.groupId);
+  const shareUrlString = shareUrl.toString();
+  console.log('Compartilhando URL:', shareUrlString);
   if (navigator.share) {
     navigator.share({
       title: 'Mamão com Açúcar',
       text: `Entre no meu cardápio compartilhado: ${window.user.menuName || window.user.groupId}`,
-      url: shareUrl
+      url: shareUrlString
     });
   } else {
-    navigator.clipboard.writeText(shareUrl).then(() => {
+    navigator.clipboard.writeText(shareUrlString).then(() => {
       UI.setAlert('Link copiado para a área de transferência!', 'info', 3000);
     }).catch(() => {
-      UI.setAlert(`Compartilhe este link: ${shareUrl}`, 'info', 10000);
+      UI.setAlert(`Compartilhe este link: ${shareUrlString}`, 'info', 10000);
     });
   }
 }
