@@ -17,15 +17,15 @@ class BarcodeScanner {
       // Só processa se barcodeInput está focado ou se outro input NÃO está focado
       const focusedElement = document.activeElement;
       const isBarcodeInput = focusedElement?.id === 'barcodeInput';
-      const isFormInput = focusedElement?.id && 
-                         (focusedElement.id.startsWith('newProduct') || 
-                          focusedElement.tagName === 'TEXTAREA');
-      
+      const isFormInput = focusedElement?.id &&
+        (focusedElement.id.startsWith('newProduct') ||
+          focusedElement.tagName === 'TEXTAREA');
+
       // Se está focado em outro input do formulário, ignora
       if (isFormInput && !isBarcodeInput) {
         return;
       }
-      
+
       // Se for Enter, processa o código
       if (e.key === 'Enter') {
         if (this.buffer.length > 0) {
@@ -143,7 +143,7 @@ class BarcodeScanner {
 
     if (!product) {
       qs('#saveProductBtn')?.addEventListener('click', () => this.saveNewProduct());
-      
+
       // Valida o campo de quantidade para aceitar apenas números, ponto e vírgula
       setTimeout(() => {
         const qtyInput = qs('#newProductQty');
@@ -206,7 +206,7 @@ class BarcodeScanner {
     if (infoDiv) {
       infoDiv.outerHTML = formHtml;
       qs('#saveProductBtn')?.addEventListener('click', () => this.saveNewProduct());
-      
+
       // Valida o campo de quantidade para aceitar apenas números, ponto e vírgula
       setTimeout(() => {
         const qtyInput = qs('#newProductQty');
