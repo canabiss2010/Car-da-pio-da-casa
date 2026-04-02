@@ -14,6 +14,18 @@ class BarcodeScanner {
   // Configura o listener do teclado para capturar os códigos
   setupKeyboardListener() {
     document.addEventListener('keypress', (e) => {
+      // Só processa se barcodeInput está focado ou se outro input NÃO está focado
+      const focusedElement = document.activeElement;
+      const isBarcodeInput = focusedElement?.id === 'barcodeInput';
+      const isFormInput = focusedElement?.id && 
+                         (focusedElement.id.startsWith('newProduct') || 
+                          focusedElement.tagName === 'TEXTAREA');
+      
+      // Se está focado em outro input do formulário, ignora
+      if (isFormInput && !isBarcodeInput) {
+        return;
+      }
+      
       // Se for Enter, processa o código
       if (e.key === 'Enter') {
         if (this.buffer.length > 0) {
@@ -94,11 +106,10 @@ class BarcodeScanner {
                      style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
             </div>
             <div style="display: flex; gap: 8px;">
-              <input type="number" 
+              <input type="text" 
                      id="newProductQty" 
-                     placeholder="Quantidade" 
-                     min="0.01" 
-                     step="0.01"
+                     placeholder="Ex: 2.5 ou 3" 
+                     inputmode="decimal"
                      style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
               <select id="newProductUnit" 
                       style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; background: white;">
@@ -132,6 +143,20 @@ class BarcodeScanner {
 
     if (!product) {
       qs('#saveProductBtn')?.addEventListener('click', () => this.saveNewProduct());
+      
+      // Valida o campo de quantidade para aceitar apenas números, ponto e vírgula
+      setTimeout(() => {
+        const qtyInput = qs('#newProductQty');
+        if (qtyInput) {
+          qtyInput.addEventListener('keypress', (e) => {
+            const char = String.fromCharCode(e.which);
+            // Aceita apenas números, ponto (.) e vírgula (,)
+            if (!/[0-9.,]/.test(char)) {
+              e.preventDefault();
+            }
+          });
+        }
+      }, 50);
     } else {
       qs('#addToInventory')?.addEventListener('click', () => this.addToInventory(product));
     }
@@ -153,11 +178,10 @@ class BarcodeScanner {
                  style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
         </div>
         <div style="display: flex; gap: 8px;">
-          <input type="number" 
+          <input type="text" 
                  id="newProductQty" 
-                 placeholder="Quantidade" 
-                 min="0.01" 
-                 step="0.01"
+                 placeholder="Ex: 2.5 ou 3" 
+                 inputmode="decimal"
                  style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
           <select id="newProductUnit" 
                  style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; background: white;">
@@ -182,6 +206,20 @@ class BarcodeScanner {
     if (infoDiv) {
       infoDiv.outerHTML = formHtml;
       qs('#saveProductBtn')?.addEventListener('click', () => this.saveNewProduct());
+      
+      // Valida o campo de quantidade para aceitar apenas números, ponto e vírgula
+      setTimeout(() => {
+        const qtyInput = qs('#newProductQty');
+        if (qtyInput) {
+          qtyInput.addEventListener('keypress', (e) => {
+            const char = String.fromCharCode(e.which);
+            // Aceita apenas números, ponto (.) e vírgula (,)
+            if (!/[0-9.,]/.test(char)) {
+              e.preventDefault();
+            }
+          });
+        }
+      }, 50);
     }
   }
 
@@ -256,7 +294,10 @@ class BarcodeScanner {
 
   saveNewProduct() {
     const name = qs('#newProductName')?.value.trim();
-    const qty = parseFloat(qs('#newProductQty')?.value);
+    let qtyValue = qs('#newProductQty')?.value.trim() || '';
+    // Converte vírgula em ponto antes de fazer parseFloat
+    qtyValue = qtyValue.replace(',', '.');
+    const qty = parseFloat(qtyValue);
     const unit = qs('#newProductUnit')?.value;
     const barcode = this.lastScannedCode;
 
