@@ -25,7 +25,7 @@ function showAlert(message, type = 'info') {
         box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         animation: slideDown 0.3s ease;
     `;
-    
+
     const style = document.createElement('style');
     if (!document.querySelector('style[data-alert-animation]')) {
         style.setAttribute('data-alert-animation', '');
@@ -37,10 +37,10 @@ function showAlert(message, type = 'info') {
         `;
         document.head.appendChild(style);
     }
-    
+
     alertDiv.textContent = message;
     document.body.appendChild(alertDiv);
-    
+
     setTimeout(() => alertDiv.remove(), type === 'error' ? 5000 : 3000);
 }
 
@@ -174,7 +174,7 @@ window.addEventListener('DOMContentLoaded', () => {
             // Gera a chave de acesso
             const accessKey = generateAccessKey();
             console.log('🔑 Chave gerada:', accessKey);
-            
+
             console.log('💾 Salvando no Firestore...');
             // Salva no Firestore
             await saveGroupToFirestore(accessKey, menuName, creatorName);
@@ -193,10 +193,10 @@ window.addEventListener('DOMContentLoaded', () => {
             };
 
             localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
-            
+
             // Gera o link de compartilhamento
             const shareLink = generateShareLink(accessKey);
-            
+
             console.log('✅ Grupo criado com sucesso!');
             console.log('Chave de acesso:', accessKey);
             console.log('Link de compartilhamento:', shareLink);

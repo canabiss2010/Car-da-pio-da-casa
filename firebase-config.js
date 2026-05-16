@@ -4,12 +4,12 @@ import { getFirestore } from "https://www.gstatic.com/firebasejs/12.13.0/firebas
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyCumfQU-IUeAL7r9-gh6XeUFMQ7TZPyz_Y",
-  authDomain: "cardapiocasa-8ed83.firebaseapp.com",
-  projectId: "cardapiocasa-8ed83",
-  storageBucket: "cardapiocasa-8ed83.firebasestorage.app",
-  messagingSenderId: "719201147169",
-  appId: "1:719201147169:web:6338dd0a67970b02920660"
+    apiKey: "AIzaSyCumfQU-IUeAL7r9-gh6XeUFMQ7TZPyz_Y",
+    authDomain: "cardapiocasa-8ed83.firebaseapp.com",
+    projectId: "cardapiocasa-8ed83",
+    storageBucket: "cardapiocasa-8ed83.firebasestorage.app",
+    messagingSenderId: "719201147169",
+    appId: "1:719201147169:web:6338dd0a67970b02920660"
 };
 
 // Initialize Firebase

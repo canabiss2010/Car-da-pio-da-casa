@@ -333,11 +333,11 @@ function handleShare() {
 
   // Tenta abrir no WhatsApp
   window.open(whatsappUrl, '_blank');
-  
+
   // Fallback: se o WhatsApp não abrir, oferece outras opções
   setTimeout(() => {
     const supported = navigator.share !== undefined;
-    
+
     if (supported && Notification.permission === 'granted') {
       UI.setAlert('📱 WhatsApp aberto! Compartilhe o convite com sua família.', 'success', 3000);
     } else if (supported) {

@@ -35,7 +35,7 @@ async function fetchGroupFromFirestore(accessKey) {
     try {
         const groupRef = doc(db, 'grupos', String(accessKey).trim().toUpperCase());
         const docSnap = await getDoc(groupRef);
-        
+
         if (docSnap.exists()) {
             const data = docSnap.data();
             return {
@@ -71,16 +71,16 @@ window.addEventListener('DOMContentLoaded', async () => {
     const codigoParam = urlParams.get('codigo');
     const groupIdParam = urlParams.get('group');
     const accessKeyParam = codigoParam || groupIdParam;
-    
+
     let inviteGroupId = null;
     let inviteGroupMeta = null;
 
     if (accessKeyParam) {
         const normalizedAccessKey = String(accessKeyParam).trim().toUpperCase();
-        
+
         // Primeiro tenta buscar localmente
         let meta = getGroupMeta(normalizedAccessKey);
-        
+
         // Se não encontrar localmente, tenta buscar no Firestore
         if (!meta) {
             try {
