@@ -318,23 +318,46 @@ function handleShare() {
     return;
   }
 
-  const shareUrl = new URL('join.html', window.location.href);
-  shareUrl.searchParams.set('group', window.user.groupId);
-  const shareUrlString = shareUrl.toString();
-  console.log('Compartilhando URL:', shareUrlString);
-  if (navigator.share) {
-    navigator.share({
-      title: 'Mamão com Açúcar',
-      text: `Entre no meu cardápio compartilhado: ${window.user.menuName || window.user.groupId}`,
-      url: shareUrlString
-    });
-  } else {
-    navigator.clipboard.writeText(shareUrlString).then(() => {
-      UI.setAlert('Link copiado para a área de transferência!', 'info', 3000);
-    }).catch(() => {
-      UI.setAlert(`Compartilhe este link: ${shareUrlString}`, 'info', 10000);
-    });
-  }
+  const accessKey = window.user.groupId;
+  const menuName = window.user.menuName || 'Cardápio';
+  const baseUrl = window.location.origin + window.location.pathname.replace('cardapio_casa_pwa.html', 'join.html');
+  const shareLink = `${baseUrl}?codigo=${accessKey}`;
+
+  const message = `🍽️ Convite para o Cardápio "${menuName}"\n\nOlá! Você foi convidado para compartilhar o planejamento de cardápio.\n\nCódigo de acesso: ${accessKey}\nOu clique aqui: ${shareLink}`;
+  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+
+  console.log('📱 Compartilhando via WhatsApp:');
+  console.log('Cardápio:', menuName);
+  console.log('Chave de acesso:', accessKey);
+  console.log('Link:', shareLink);
+
+  // Tenta abrir no WhatsApp
+  window.open(whatsappUrl, '_blank');
+  
+  // Fallback: se o WhatsApp não abrir, oferece outras opções
+  setTimeout(() => {
+    const supported = navigator.share !== undefined;
+    
+    if (supported && Notification.permission === 'granted') {
+      UI.setAlert('📱 WhatsApp aberto! Compartilhe o convite com sua família.', 'success', 3000);
+    } else if (supported) {
+      navigator.share({
+        title: 'Mamão com Açúcar',
+        text: message,
+        url: shareLink
+      }).catch(() => {
+        navigator.clipboard.writeText(shareLink).then(() => {
+          UI.setAlert('✅ Link copiado! Cole no WhatsApp para convidar sua família.', 'success', 3000);
+        });
+      });
+    } else {
+      navigator.clipboard.writeText(shareLink).then(() => {
+        UI.setAlert('✅ Link copiado! Cole no WhatsApp para convidar sua família.', 'success', 3000);
+      }).catch(() => {
+        UI.setAlert(`Compartilhe este link: ${shareLink}`, 'info', 10000);
+      });
+    }
+  }, 500);
 }
 
 function handleLogout() {
@@ -398,6 +421,15 @@ function setupEventListeners() {
   const shareBlock = qs('#b-share');
   if (shareBlock) {
     shareBlock.addEventListener('click', handleShare);
+  }
+
+  // Botão de compartilhar específico
+  const shareBtn = qs('#shareBtn');
+  if (shareBtn) {
+    shareBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleShare();
+    });
   }
 
   // Navegação por teclado

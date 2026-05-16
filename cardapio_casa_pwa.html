@@ -10,6 +10,7 @@
   <link rel="icon" type="image/svg+xml"
     href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍽️</text></svg>">
   <meta name="theme-color" content="#1F6F3B" />
+  <script type="module" src="firebase-config.js"></script>
 </head>
 
 <body>
@@ -47,8 +48,11 @@
         <p>Ver itens necessários para o plano</p>
       </div>
       <div class="block full" id="b-share" data-key="share">
-        <h3>Compartlhe seu cardápio</h3>
-        <p>Envie o link para sua família</p>
+        <div style="flex: 1; width: 100%;">
+          <h3>👨‍👩‍👧‍👦 Convidar Família</h3>
+          <p>Compartilhe seu cardápio via WhatsApp</p>
+        </div>
+        <button id="shareBtn" class="btn-share" style="margin-top: 8px; width: 100%;">📱 Abrir WhatsApp</button>
       </div>
     </div>
 

@@ -7,58 +7,224 @@
     <title>Entrar em Cardápio</title>
     <link rel="stylesheet" href="css/styles.css">
     <meta name="theme-color" content="#1F6F3B" />
+    <script type="module" src="firebase-config.js"></script>
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #1F6F3B 0%, #2ea47a 100%);
+            font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+        }
+
+        .join-container {
+            width: 100%;
+            max-width: 400px;
+            padding: 24px;
+        }
+
+        .join-header {
+            text-align: center;
+            color: white;
+            margin-bottom: 32px;
+        }
+
+        .join-header .logo-text {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .join-header h1 {
+            font-family: Oswald, sans-serif;
+            font-size: 28px;
+            margin: 0 0 8px 0;
+            color: white;
+            font-weight: 700;
+        }
+
+        .join-header p {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.9);
+            margin: 0;
+        }
+
+        .join-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+        }
+
+        .join-card h2 {
+            font-size: 20px;
+            color: #1F6F3B;
+            margin: 0 0 12px 0;
+            font-family: Oswald, sans-serif;
+        }
+
+        .join-card p {
+            font-size: 14px;
+            color: #666;
+            margin: 0 0 20px 0;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 6px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+            transition: border-color 0.3s;
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #1F6F3B;
+            box-shadow: 0 0 0 3px rgba(31, 111, 59, 0.1);
+        }
+
+        .join-card button[type="submit"] {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #1F6F3B 0%, #2ea47a 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+        }
+
+        .join-card button[type="submit"]:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(31, 111, 59, 0.3);
+        }
+
+        .join-card button[type="submit"]:active {
+            transform: translateY(0);
+        }
+
+        .join-notice {
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            background-color: #fff9e6;
+            color: #b47c00;
+            display: none;
+        }
+
+        .join-notice.visible {
+            display: block;
+        }
+
+        .form-footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 13px;
+            color: #999;
+        }
+
+        .form-footer a {
+            color: white;
+            text-decoration: none;
+            background: linear-gradient(135deg, #1F6F3B 0%, #2ea47a 100%);
+            padding: 10px 16px;
+            border-radius: 8px;
+            display: inline-block;
+            margin-top: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .form-footer a:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(31, 111, 59, 0.3);
+        }
+
+        @media (max-width: 480px) {
+            .join-container {
+                padding: 16px;
+            }
+
+            .join-card {
+                padding: 20px;
+            }
+
+            .join-header h1 {
+                font-size: 24px;
+            }
+
+            .join-card h2 {
+                font-size: 18px;
+            }
+        }
+    </style>
 </head>
 
 <body>
-    <div class="wrap" style="max-width:520px;margin:36px auto;">
-        <header>
-            <div class="logo"></div>
-            <div>
-                <h1>MamãocomAçúcar</h1>
-                <p class="subtitle">Entrar em um cardápio já criado</p>
-            </div>
-        </header>
+    <div class="join-container">
+        <div class="join-header">
+            <div class="logo-text">🍽️</div>
+            <h1>Mamão com Açúcar</h1>
+            <p>Entrar em um cardápio já criado</p>
+        </div>
 
-        <div class="entry-card">
-            <h2>Já existe um cardápio?</h2>
-            <p>Digite o nome do cardápio cadastrado e seu nome para abrir os dados salvos.</p>
+        <div class="join-card">
+            <h2>Participar</h2>
+            <p id="joinMessage">Digite o código do cardápio e seu nome</p>
 
             <form id="joinExistingForm">
-                <div id="groupNameSection">
-                    <label>Nome do cardápio</label>
-                    <input id="existingMenuName" type="text" placeholder="Ex: Cardápio dos Panzarella" required>
+                <div id="groupNameSection" class="form-group">
+                    <label for="existingMenuName">Nome do Cardápio</label>
+                    <input 
+                        id="existingMenuName" 
+                        type="text" 
+                        placeholder="Ex: Cardápio dos Panzarella"
+                        autocomplete="off"
+                    >
                 </div>
-                <label>Seu nome</label>
-                <input id="existingUserName" type="text" placeholder="Nome" required>
-                <button type="submit">Entrar no cardápio</button>
+
+                <div class="form-group">
+                    <label for="existingUserName">Seu Nome</label>
+                    <input 
+                        id="existingUserName" 
+                        type="text" 
+                        placeholder="Digite seu nome"
+                        required
+                        autocomplete="off"
+                    >
+                </div>
+
+                <button type="submit">👥 Entrar no Cardápio</button>
             </form>
 
-            <div id="joinNotice" class="small" style="margin-top:12px;color:#b47c00"></div>
-            <p class="small" style="margin-top:16px">
-                <a href="create.html">Voltar para criar um novo cardápio</a>
-            </p>
+            <div id="joinNotice" class="join-notice"></div>
+
+            <div class="form-footer">
+                <p style="margin: 0 0 12px 0;">Recebeu um convite? Clique no link para entrar</p>
+                <a href="create.html">✨ Ou crie um novo cardápio</a>
+            </div>
         </div>
     </div>
 
-    <script type="module">
-        // Import the functions you need from the SDKs you need
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
-        // TODO: Add SDKs for Firebase products that you want to use
-        // https://firebase.google.com/docs/web/setup#available-libraries
-
-        // Your web app's Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyCumfQU-IUeAL7r9-gh6XeUFMQ7rTZPyz_Y",
-            authDomain: "cardapiocasa-8ed83.firebaseapp.com",
-            projectId: "cardapiocasa-8ed83",
-            storageBucket: "cardapiocasa-8ed83.firebasestorage.app",
-            messagingSenderId: "719201147169",
-            appId: "1:719201147169:web:6338dd0a67970b02920660"
-        };
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-    </script>
     <script type="module" src="js/join.js"></script>
 </body>
 

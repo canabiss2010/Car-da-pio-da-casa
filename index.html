@@ -5,13 +5,134 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mamão com Açúcar</title>
+  <link rel="stylesheet" href="css/styles.css" />
   <link rel="manifest" href="cardapio_manifest.json" />
   <meta name="theme-color" content="#1F6F3B" />
-  <!-- Redireciona para a versão PWA principal -->
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background: linear-gradient(135deg, #1F6F3B 0%, #2ea47a 100%);
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+
+    .welcome-container {
+      width: 100%;
+      max-width: 420px;
+      padding: 24px;
+      text-align: center;
+      color: white;
+    }
+
+    .welcome-logo {
+      font-size: 80px;
+      margin-bottom: 20px;
+    }
+
+    .welcome-container h1 {
+      font-family: Oswald, sans-serif;
+      font-size: 36px;
+      margin: 0 0 8px 0;
+      color: white;
+      font-weight: 700;
+    }
+
+    .welcome-container p {
+      font-size: 16px;
+      color: rgba(255, 255, 255, 0.9);
+      margin: 0 0 40px 0;
+      line-height: 1.5;
+    }
+
+    .welcome-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .welcome-btn {
+      padding: 16px 24px;
+      font-size: 16px;
+      font-weight: 700;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      transition: all 0.3s ease;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+
+    .welcome-btn-primary {
+      background: white;
+      color: #1F6F3B;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    }
+
+    .welcome-btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+    }
+
+    .welcome-btn-secondary {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: 2px solid white;
+      backdrop-filter: blur(10px);
+    }
+
+    .welcome-btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .welcome-footer {
+      margin-top: 40px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    @media (max-width: 480px) {
+      .welcome-container h1 {
+        font-size: 28px;
+      }
+
+      .welcome-container p {
+        font-size: 14px;
+        margin-bottom: 32px;
+      }
+
+      .welcome-btn {
+        padding: 14px 20px;
+        font-size: 15px;
+      }
+    }
+  </style>
 </head>
 
 <body>
-  <p>Redirecionando…</p>
+  <div class="welcome-container">
+    <div class="welcome-logo">🍽️</div>
+    <h1>Mamão com Açúcar</h1>
+    <p>Planejamento de cardápio compartilhado para sua família</p>
+
+    <div class="welcome-buttons">
+      <a href="create.html" class="welcome-btn welcome-btn-primary">
+        ✨ Criar Novo Cardápio
+      </a>
+      <a href="join.html" class="welcome-btn welcome-btn-secondary">
+        📱 Entrar em Cardápio Existente
+      </a>
+    </div>
+
+    <div class="welcome-footer">
+      <p>Organize as refeições de sua família com facilidade</p>
+    </div>
+  </div>
+
   <script>
     const STORAGE_KEYS = { USER_PROFILE: 'cc_user_pwa' };
     let profile = null;
@@ -23,8 +144,6 @@
 
     if (profile && profile.name && profile.groupId) {
       location.replace('cardapio_casa_pwa.html');
-    } else {
-      location.replace('create.html');
     }
   </script>
 </body>
