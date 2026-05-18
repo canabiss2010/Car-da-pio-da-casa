@@ -1,8 +1,9 @@
+// === SCRIPT CARREGADO ===
 import { STORAGE_KEYS } from './config.js';
-import * as UI from './modules/ui.js';
 import { qs, validateJSON } from './modules/utils.js';
 import { db } from '../firebase-config.js';
 import { doc, setDoc } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js";
+console.log('=== SCRIPT CARREGADO ===');
 
 /**
  * Mostra um alerta simples (fallback se UI não estiver disponível)
@@ -131,93 +132,93 @@ function generateWhatsAppShareUrl(menuName, accessKey, shareLink) {
     return `https://wa.me/?text=${message}`;
 }
 
+async function handleCreateSubmit(event) {
+    console.log('=== BOTÃO CLICADO COM SUCESSO ===');
+    if (event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+    }
+
+    const menuNameInput = document.getElementById('menuName');
+    const creatorNameInput = document.getElementById('creatorName');
+
+    if (!menuNameInput || !creatorNameInput) {
+        console.error('❌ Inputs não encontrados');
+        showAlert('Erro: Campos de entrada não encontrados', 'error');
+        return;
+    }
+
+    const menuName = menuNameInput.value.trim();
+    const creatorName = creatorNameInput.value.trim();
+
+    console.log('📋 Executando handleCreateSubmit', { menuName, creatorName });
+
+    if (!menuName || !creatorName) {
+        showAlert('Preencha o nome do cardápio e o seu nome.', 'error');
+        return;
+    }
+
+    if (menuNameExists(menuName)) {
+        showAlert('Esse nome de cardápio já está em uso. Escolha outro.', 'error');
+        return;
+    }
+
+    try {
+        console.log('🔄 Gerando chave de acesso...');
+        const accessKey = generateAccessKey();
+        console.log('🔑 Chave gerada:', accessKey);
+
+        console.log('💾 Salvando no Firestore...');
+        await saveGroupToFirestore(accessKey, menuName, creatorName);
+        console.log('✅ Salvo no Firestore!');
+
+        addGroupMeta(accessKey, menuName, creatorName);
+        console.log('✅ Salvo no localStorage!');
+
+        const profile = {
+            name: creatorName,
+            groupId: accessKey,
+            menuName,
+            isHost: true
+        };
+
+        localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
+
+        const shareLink = generateShareLink(accessKey);
+
+        console.log('✅ Grupo criado com sucesso!');
+        console.log('Chave de acesso:', accessKey);
+        console.log('Link de compartilhamento:', shareLink);
+        console.log('Perfil criado:', profile);
+
+        sessionStorage.setItem('currentShareLink', shareLink);
+        sessionStorage.setItem('currentMenuName', menuName);
+        sessionStorage.setItem('currentAccessKey', accessKey);
+
+        showAlert('✨ Cardápio criado com sucesso! Redirecionando...', 'success');
+
+        setTimeout(() => {
+            window.location.replace('cardapio_casa_pwa.html');
+        }, 800);
+    } catch (error) {
+        console.error('❌ Erro ao criar grupo:', error);
+        showAlert(`Erro ao criar o cardápio: ${error.message}`, 'error');
+    }
+}
+
+window.handleCreateSubmit = handleCreateSubmit;
+
 window.addEventListener('DOMContentLoaded', () => {
-    const form = qs('#createForm');
+    const form = document.getElementById('createForm');
+    console.log('=== TENTANDO OUVIR O FORMULÁRIO ===');
     if (!form) {
-        console.error('❌ Formulário não encontrado!');
+        console.error('ERRO: Formulário não foi encontrado no HTML!');
         showAlert('Erro: Formulário não carregou corretamente', 'error');
         return;
     }
 
     console.log('✅ Formulário encontrado, vinculando eventos...');
 
-    form.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        console.log('📋 Submit acionado');
-
-        const menuNameInput = qs('#menuName');
-        const creatorNameInput = qs('#creatorName');
-
-        if (!menuNameInput || !creatorNameInput) {
-            console.error('❌ Inputs não encontrados');
-            showAlert('Erro: Campos de entrada não encontrados', 'error');
-            return;
-        }
-
-        const menuName = menuNameInput.value.trim();
-        const creatorName = creatorNameInput.value.trim();
-
-        console.log('Dados:', { menuName, creatorName });
-
-        if (!menuName || !creatorName) {
-            showAlert('Preencha o nome do cardápio e o seu nome.', 'error');
-            return;
-        }
-
-        if (menuNameExists(menuName)) {
-            showAlert('Esse nome de cardápio já está em uso. Escolha outro.', 'error');
-            return;
-        }
-
-        try {
-            console.log('🔄 Gerando chave de acesso...');
-            // Gera a chave de acesso
-            const accessKey = generateAccessKey();
-            console.log('🔑 Chave gerada:', accessKey);
-
-            console.log('💾 Salvando no Firestore...');
-            // Salva no Firestore
-            await saveGroupToFirestore(accessKey, menuName, creatorName);
-            console.log('✅ Salvo no Firestore!');
-
-            // Salva no localStorage para backup local
-            addGroupMeta(accessKey, menuName, creatorName);
-            console.log('✅ Salvo no localStorage!');
-
-            // Cria o perfil do usuário
-            const profile = {
-                name: creatorName,
-                groupId: accessKey,
-                menuName,
-                isHost: true
-            };
-
-            localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
-
-            // Gera o link de compartilhamento
-            const shareLink = generateShareLink(accessKey);
-
-            console.log('✅ Grupo criado com sucesso!');
-            console.log('Chave de acesso:', accessKey);
-            console.log('Link de compartilhamento:', shareLink);
-            console.log('Perfil criado:', profile);
-
-            // Armazena o link para uso posterior (compartilhamento)
-            sessionStorage.setItem('currentShareLink', shareLink);
-            sessionStorage.setItem('currentMenuName', menuName);
-            sessionStorage.setItem('currentAccessKey', accessKey);
-
-            showAlert('✨ Cardápio criado com sucesso! Redirecionando...', 'success');
-
-            // Redireciona para a tela principal após um pequeno delay
-            setTimeout(() => {
-                window.location.replace('cardapio_casa_pwa.html');
-            }, 800);
-        } catch (error) {
-            console.error('❌ Erro ao criar grupo:', error);
-            showAlert(`Erro ao criar o cardápio: ${error.message}`, 'error');
-        }
-    });
+    form.addEventListener('submit', handleCreateSubmit);
 });
 
 /**
