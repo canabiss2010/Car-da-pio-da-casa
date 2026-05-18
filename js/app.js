@@ -7,11 +7,40 @@ import { qs, validateJSON } from './modules/utils.js';
 console.log('📦 Utils importado');
 import { barcodeScanner } from './modules/barcode.js';
 console.log('📦 Barcode importado');
+import { db } from '../firebase-config.js';
+import { doc, getDoc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js";
+console.log('📦 Firestore importado');
+
+function persistProfileFromUrl() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const groupId = urlParams.get('group');
+  const userName = urlParams.get('user');
+
+  if (!groupId || !userName) {
+    return false;
+  }
+
+  const profile = {
+    name: String(userName).trim(),
+    groupId: String(groupId).trim().toUpperCase(),
+    menuName: null,
+    isHost: false
+  };
+
+  localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
+  window.user = profile;
+  window.activeGroupCode = profile.groupId;
+  console.log('📥 Perfil salvo a partir da URL:', profile);
+  return true;
+}
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 DOMContentLoaded - Iniciando app...');
   try {
+    persistProfileFromUrl();
+    console.log('📥 Parâmetros de URL processados antes de iniciar o app');
+
     // Aguardar um pouco para garantir que os módulos estão carregados
     await new Promise(resolve => setTimeout(resolve, 100));
     console.log('📦 Módulos carregados, iniciando UI...');
@@ -20,7 +49,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('🎛️ UI inicializada, configurando listeners...');
     setupEventListeners();
     console.log('👂 Listeners configurados, carregando dados iniciais...');
-    loadInitialData();
+    await loadInitialData();
     console.log('💾 Dados carregados, configurando service worker...');
     setupServiceWorker();
     console.log('✅ App totalmente inicializado!');
@@ -93,7 +122,136 @@ function addGroupMeta(groupId, menuName, creatorName) {
   saveGroupMetaStore(store);
 }
 
-function loadInitialData() {
+async function syncCloudGroupData() {
+  const groupId = String(window.activeGroupCode || window.user?.groupId || '').trim().toUpperCase();
+  if (!groupId) {
+    console.warn('syncCloudGroupData: nenhum groupId disponível para sincronizar');
+    return;
+  }
+
+  try {
+    const groupRef = doc(db, 'grupos', groupId);
+    await updateDoc(groupRef, {
+      dispensa: window.inventory || [],
+      receitas: window.recipes || [],
+      cardapio: window.plan || [],
+      shoppingList: window.shoppingList || []
+    });
+    console.log('✅ Firestore sincronizado para grupo', groupId);
+  } catch (error) {
+    console.warn('⚠️ updateDoc falhou, tentando setDoc com merge:', error);
+    try {
+      const groupRef = doc(db, 'grupos', groupId);
+      await setDoc(groupRef, {
+        dispensa: window.inventory || [],
+        receitas: window.recipes || [],
+        cardapio: window.plan || [],
+        shoppingList: window.shoppingList || []
+      }, { merge: true });
+      console.log('✅ Firestore criado/mesclado com setDoc merge para grupo', groupId);
+    } catch (fallbackError) {
+      console.error('❌ Falha no fallback de Firestore:', fallbackError);
+    }
+  }
+}
+
+async function fetchCloudGroupData(groupId) {
+  try {
+    const groupRef = doc(db, 'grupos', groupId);
+    const snapshot = await getDoc(groupRef);
+
+    if (!snapshot.exists()) {
+      console.warn('⚠️ Documento Firestore não encontrado para grupo', groupId);
+      return null;
+    }
+
+    const cloudData = snapshot.data();
+
+    if (cloudData.menuName || cloudData.creatorName) {
+      const store = getGroupMetaStore();
+      store[groupId] = {
+        menuName: cloudData.menuName || '',
+        creatorName: cloudData.creatorName || '',
+        createdAt: cloudData.createdAt || new Date().toISOString()
+      };
+      saveGroupMetaStore(store);
+      if (window.user && window.user.groupId === groupId && !window.user.menuName && cloudData.menuName) {
+        window.user.menuName = cloudData.menuName;
+        localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(window.user));
+      }
+    }
+
+    window.inventory = Array.isArray(cloudData.dispensa) ? cloudData.dispensa : window.inventory;
+    window.recipes = Array.isArray(cloudData.receitas) ? cloudData.receitas : window.recipes;
+    window.plan = Array.isArray(cloudData.cardapio) ? cloudData.cardapio : window.plan;
+    window.shoppingList = Array.isArray(cloudData.shoppingList) ? cloudData.shoppingList : window.shoppingList;
+
+    saveAll();
+    console.log('✅ Dados do Firestore carregados e armazenados localmente');
+    return cloudData;
+  } catch (error) {
+    console.error('❌ Erro ao carregar dados do Firestore:', error);
+    return null;
+  }
+}
+
+async function renderInitialAppView() {
+  try {
+    if (window.inventory.length > 0) {
+      await loadModule('./modules/inventory.js', (module) => module.showInventory());
+      return;
+    }
+    if (window.recipes.length > 0) {
+      await loadModule('./modules/recipes.js', (module) => module.showRecipes());
+      return;
+    }
+    if (window.plan.length > 0) {
+      await loadModule('./modules/planning.js', (module) => module.showCurrentPlan());
+      return;
+    }
+  } catch (error) {
+    console.warn('⚠️ Não foi possível renderizar visão inicial automática:', error);
+  }
+}
+
+async function loadGroupData() {
+  window.inventory = validateJSON(localStorage.getItem(groupItemKey(STORAGE_KEYS.INVENTORY))) || [];
+  window.recipes = validateJSON(localStorage.getItem(groupItemKey(STORAGE_KEYS.RECIPES))) || [];
+  window.plan = validateJSON(localStorage.getItem(groupItemKey(STORAGE_KEYS.PLAN))) || [];
+  window.shoppingList = validateJSON(localStorage.getItem(groupItemKey(STORAGE_KEYS.SHOPPING_LIST))) || [];
+
+  // Migração de versão (se necessário)
+  if (window.recipes.length > 0) {
+    window.recipes = window.recipes.map(r => ({
+      ...r,
+      frequency: r.frequency || r.priority || 1,
+      servings: r.servings || 4
+    }));
+    saveAll();
+  }
+
+  const groupId = String(window.activeGroupCode || window.user?.groupId || '').trim().toUpperCase();
+  if (!groupId) {
+    console.warn('loadGroupData: nenhum groupId disponível para carregar Firestore');
+    return;
+  }
+
+  const groupMeta = getGroupMeta(groupId);
+  const shouldFetchCloud = (!window.inventory.length && !window.recipes.length && !window.plan.length) || !groupMeta || !window.user?.menuName;
+
+  if (shouldFetchCloud) {
+    console.log('🔌 Forçando carregamento do Firestore para grupo', groupId);
+    const cloudData = await fetchCloudGroupData(groupId);
+    if (cloudData) {
+      await renderInitialAppView();
+    }
+    return;
+  }
+
+  console.log('ℹ️ Dados locais encontrados, não foi necessário carregar Firestore automaticamente para este grupo');
+}
+
+async function loadInitialData() {
   try {
     // Verificar se há perfil antigo com 'code' em vez de 'groupId'
     const oldProfile = validateJSON(localStorage.getItem(STORAGE_KEYS.USER_PROFILE));
@@ -121,7 +279,7 @@ function loadInitialData() {
       window.user = profile;
       window.activeGroupCode = profile.groupId;
       showAppScreen(profile);
-      loadGroupData();
+      loadGroupData().catch(error => console.error('loadGroupData error:', error));
       return;
     }
 
@@ -157,29 +315,15 @@ function loadInitialData() {
   }
 }
 
-function loadGroupData() {
-  window.inventory = validateJSON(localStorage.getItem(groupItemKey(STORAGE_KEYS.INVENTORY))) || [];
-  window.recipes = validateJSON(localStorage.getItem(groupItemKey(STORAGE_KEYS.RECIPES))) || [];
-  window.plan = validateJSON(localStorage.getItem(groupItemKey(STORAGE_KEYS.PLAN))) || [];
-  window.shoppingList = validateJSON(localStorage.getItem(groupItemKey(STORAGE_KEYS.SHOPPING_LIST))) || [];
-
-  // Migração de versão (se necessário)
-  if (window.recipes.length > 0) {
-    window.recipes = window.recipes.map(r => ({
-      ...r,
-      frequency: r.frequency || r.priority || 1,
-      servings: r.servings || 4
-    }));
-    saveAll();
-  }
-}
-
 function saveAll() {
   try {
     localStorage.setItem(groupItemKey(STORAGE_KEYS.INVENTORY), JSON.stringify(window.inventory));
     localStorage.setItem(groupItemKey(STORAGE_KEYS.RECIPES), JSON.stringify(window.recipes));
     localStorage.setItem(groupItemKey(STORAGE_KEYS.PLAN), JSON.stringify(window.plan));
     localStorage.setItem(groupItemKey(STORAGE_KEYS.SHOPPING_LIST), JSON.stringify(window.shoppingList || []));
+
+    // Sincroniza com Firestore de forma assíncrona para não bloquear a UI
+    syncCloudGroupData();
   } catch (e) {
     console.error('Erro ao salvar dados:', e);
     UI.setAlert('Erro ao salvar dados. Verifique o espaço de armazenamento.', 'error', 0);
@@ -203,7 +347,7 @@ function setUserProfile(name, groupId, menuName = null, isHost = false) {
   window.user = profile;
   window.activeGroupCode = groupId;
   showAppScreen(profile);
-  loadGroupData();
+  loadGroupData().catch(error => console.error('loadGroupData error:', error));
 
   UI.setAlert(`Olá ${profile.name}! ${isHost ? 'Cardápio criado' : 'Entrou no cardápio'}.`, 'info', 5000);
 }
@@ -306,6 +450,11 @@ function showAppScreen(profile) {
   const status = qs('#userStatus');
   if (status) {
     status.textContent = `Olá, ${profile.name}! ${profile.menuName ? `Cardápio: ${profile.menuName}` : `Grupo: ${profile.groupId}`}`;
+  }
+
+  const groupCodeDisplay = qs('#groupCodeDisplay');
+  if (groupCodeDisplay) {
+    groupCodeDisplay.textContent = profile.groupId ? `Código da Casa: ${profile.groupId}` : '';
   }
 
   const logoutBtn = qs('#logoutBtn');
