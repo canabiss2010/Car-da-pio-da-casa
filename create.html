@@ -15,107 +15,113 @@
             justify-content: center;
             min-height: 100vh;
             margin: 0;
+            padding: 18px 12px 24px;
             background: linear-gradient(135deg, #1F6F3B 0%, #2ea47a 100%);
             font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
         }
 
         .create-container {
             width: 100%;
-            max-width: 400px;
-            padding: 24px;
+            max-width: 440px;
         }
 
         .create-header {
             text-align: center;
             color: white;
-            margin-bottom: 32px;
+            margin-bottom: 28px;
+            padding: 0 8px;
         }
 
-        .create-header .logo-text {
+        .logo-text {
             font-size: 48px;
             margin-bottom: 12px;
+            line-height: 1;
         }
 
         .create-header h1 {
             font-family: Oswald, sans-serif;
-            font-size: 28px;
-            margin: 0 0 8px 0;
+            font-size: 32px;
+            margin: 0 0 8px;
             color: white;
             font-weight: 700;
+            letter-spacing: -0.02em;
         }
 
         .create-header p {
-            font-size: 14px;
-            color: rgba(255, 255, 255, 0.9);
+            font-size: 15px;
+            color: rgba(255, 255, 255, 0.95);
             margin: 0;
+            line-height: 1.6;
         }
 
         .create-card {
-            background: white;
-            border-radius: 16px;
-            padding: 24px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 24px;
+            padding: 28px 24px;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.16);
         }
 
         .create-card h2 {
-            font-size: 20px;
+            font-size: 22px;
             color: #1F6F3B;
-            margin: 0 0 12px 0;
+            margin: 0 0 12px;
             font-family: Oswald, sans-serif;
         }
 
         .create-card p {
-            font-size: 14px;
-            color: #666;
-            margin: 0 0 20px 0;
+            font-size: 15px;
+            color: #5c6a5a;
+            margin: 0 0 24px;
+            line-height: 1.7;
         }
 
         .form-group {
-            margin-bottom: 16px;
+            margin-bottom: 18px;
         }
 
         .form-group label {
             display: block;
             font-size: 13px;
             font-weight: 600;
-            color: #333;
-            margin-bottom: 6px;
+            color: #2c3b2f;
+            margin-bottom: 8px;
         }
 
         .form-group input {
             width: 100%;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 14px;
+            padding: 14px 16px;
+            border: 1px solid #dde2dd;
+            border-radius: 14px;
+            font-size: 15px;
             font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
-            transition: border-color 0.3s;
+            transition: border-color 0.3s, box-shadow 0.3s;
             box-sizing: border-box;
+            background: #fbfdf8;
         }
 
         .form-group input:focus {
             outline: none;
             border-color: #1F6F3B;
-            box-shadow: 0 0 0 3px rgba(31, 111, 59, 0.1);
+            box-shadow: 0 0 0 4px rgba(31, 111, 59, 0.12);
         }
 
         .create-card button[type="submit"] {
             width: 100%;
-            padding: 14px;
+            padding: 16px;
             background: linear-gradient(135deg, #1F6F3B 0%, #2ea47a 100%);
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 14px;
             font-size: 16px;
             font-weight: 700;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
             font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
         }
 
         .create-card button[type="submit"]:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(31, 111, 59, 0.3);
+            box-shadow: 0 14px 32px rgba(31, 111, 59, 0.2);
         }
 
         .create-card button[type="submit"]:active {
@@ -123,43 +129,51 @@
         }
 
         .form-footer {
-            margin-top: 20px;
+            margin-top: 22px;
             text-align: center;
             font-size: 13px;
-            color: #999;
+            color: rgba(255, 255, 255, 0.9);
+            padding: 0 8px;
+            line-height: 1.6;
         }
 
         .form-footer a {
             color: white;
             text-decoration: none;
             background: linear-gradient(135deg, #1F6F3B 0%, #2ea47a 100%);
-            padding: 10px 16px;
-            border-radius: 8px;
-            display: inline-block;
-            margin-top: 12px;
-            transition: all 0.3s ease;
+            padding: 12px 18px;
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 14px;
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
         }
 
         .form-footer a:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(31, 111, 59, 0.3);
+            box-shadow: 0 12px 24px rgba(31, 111, 59, 0.18);
         }
 
         @media (max-width: 480px) {
+            body {
+                padding: 16px 12px 20px;
+            }
+
             .create-container {
-                padding: 16px;
+                max-width: 100%;
             }
 
             .create-card {
-                padding: 20px;
+                padding: 22px 18px;
             }
 
             .create-header h1 {
-                font-size: 24px;
+                font-size: 28px;
             }
 
             .create-card h2 {
-                font-size: 18px;
+                font-size: 20px;
             }
         }
     </style>

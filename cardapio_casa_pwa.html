@@ -17,15 +17,39 @@
   <div class="wrap" id="appScreen" style="display:none;">
     <header>
       <div class="logo"></div>
-      <div>
+      <div class="brand">
         <h1>MamãocomAçúcar</h1>
-        <p class="subtitle">Planejamento rápido para sua casa</p>
-        <p id="userStatus" class="subtitle" style="margin-top:4px;color:#2ea47a"></p>
-        <p id="groupCodeDisplay" class="subtitle" style="margin-top:4px;color:#999;font-size:0.95rem;"></p>
       </div>
-      <button id="logoutBtn" class="btn-ghost"
-        style="height:fit-content;align-self:flex-start;display:none;">Sair</button>
+      <button id="menuToggle" class="menu-toggle" type="button" aria-label="Abrir menu">☰</button>
     </header>
+
+    <aside id="sidebarMenu" class="sidebar" aria-hidden="true">
+      <div class="sidebar-inner">
+        <div class="sidebar-header">
+          <div class="sidebar-logo"></div>
+          <div>
+            <h2>MamãocomAçúcar</h2>
+            <p class="sidebar-subtitle">Casa compartilhada</p>
+          </div>
+        </div>
+        <div class="sidebar-content">
+          <p id="sidebarMenuName" class="sidebar-item">Cardápio: —</p>
+          <p id="sidebarGroupCode" class="sidebar-item">Código da Casa: —</p>
+
+          <div class="sidebar-share">
+            <div>
+              <strong>👨‍👩‍👧‍👦 Convidar Família</strong>
+              <p>Compartilhe o link do cardápio ou envie pelo WhatsApp para todo mundo entrar junto.</p>
+            </div>
+            <button id="shareBtn" class="btn-share" type="button">📱 Abrir WhatsApp</button>
+          </div>
+        </div>
+        <div class="sidebar-footer">
+          <button id="logoutBtn" class="btn-logout" type="button">Sair</button>
+        </div>
+      </div>
+    </aside>
+    <div id="sidebarBackdrop" class="sidebar-backdrop" aria-hidden="true"></div>
 
     <div class="grid" id="mainGrid">
       <div class="block" id="b-inv" data-key="inv">
@@ -47,13 +71,6 @@
       <div class="block full" id="b-shopping" data-key="shopping">
         <h3>Lista de Compras</h3>
         <p>Ver itens necessários para o plano</p>
-      </div>
-      <div class="block full" id="b-share" data-key="share">
-        <div style="flex: 1; width: 100%;">
-          <h3>👨‍👩‍👧‍👦 Convidar Família</h3>
-          <p>Compartilhe seu cardápio via WhatsApp</p>
-        </div>
-        <button id="shareBtn" class="btn-share" style="margin-top: 8px; width: 100%;">📱 Abrir WhatsApp</button>
       </div>
     </div>
 

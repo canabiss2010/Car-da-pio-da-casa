@@ -123,7 +123,7 @@
       <a href="create.html" class="welcome-btn welcome-btn-primary">
         ✨ Criar Novo Cardápio
       </a>
-      <a href="join.html" class="welcome-btn welcome-btn-secondary">
+      <a id="joinExistingBtn" href="join.html" class="welcome-btn welcome-btn-secondary">
         📱 Entrar em Cardápio Existente
       </a>
     </div>
@@ -144,6 +144,16 @@
 
     if (profile && profile.name && profile.groupId) {
       location.replace('cardapio_casa_pwa.html');
+    }
+
+    const joinExistingBtn = document.getElementById('joinExistingBtn');
+    if (joinExistingBtn) {
+      joinExistingBtn.addEventListener('click', (event) => {
+        if (joinExistingBtn.getAttribute('href') !== 'join.html') {
+          event.preventDefault();
+          location.href = 'join.html';
+        }
+      });
     }
   </script>
 </body>

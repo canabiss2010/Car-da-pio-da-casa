@@ -8,7 +8,7 @@ console.log('📦 Utils importado');
 import { barcodeScanner } from './modules/barcode.js';
 console.log('📦 Barcode importado');
 import { db } from '../firebase-config.js';
-import { doc, getDoc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js";
+import { doc, getDoc, setDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js";
 console.log('📦 Firestore importado');
 
 function persistProfileFromUrl() {
@@ -91,6 +91,134 @@ function getGroupMeta(groupId) {
 
 function groupExists(groupId) {
   return !!getGroupMeta(groupId);
+}
+
+window.isSyncing = false;
+let currentGroupUnsubscribe = null;
+
+function unsubscribeRealtime() {
+  if (typeof currentGroupUnsubscribe === 'function') {
+    currentGroupUnsubscribe();
+    currentGroupUnsubscribe = null;
+  }
+}
+
+function arraysEqual(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function saveAllLocal() {
+  try {
+    localStorage.setItem(groupItemKey(STORAGE_KEYS.INVENTORY), JSON.stringify(window.inventory || []));
+    localStorage.setItem(groupItemKey(STORAGE_KEYS.RECIPES), JSON.stringify(window.recipes || []));
+    localStorage.setItem(groupItemKey(STORAGE_KEYS.PLAN), JSON.stringify(window.plan || []));
+    localStorage.setItem(groupItemKey(STORAGE_KEYS.SHOPPING_LIST), JSON.stringify(window.shoppingList || []));
+  } catch (error) {
+    console.error('Erro ao salvar localmente:', error);
+  }
+}
+
+function updateSidebarDetails(profile) {
+  const menuNameEl = qs('#sidebarMenuName');
+  if (menuNameEl) {
+    menuNameEl.textContent = profile.menuName ? `Cardápio: ${profile.menuName}` : 'Cardápio: —';
+  }
+  const groupCodeEl = qs('#sidebarGroupCode');
+  if (groupCodeEl) {
+    groupCodeEl.textContent = profile.groupId ? `Código da Casa: ${profile.groupId}` : 'Código da Casa: —';
+  }
+}
+
+function openMenu() {
+  const sidebar = qs('#sidebarMenu');
+  const backdrop = qs('#sidebarBackdrop');
+  if (sidebar && backdrop) {
+    sidebar.classList.add('open');
+    sidebar.setAttribute('aria-hidden', 'false');
+    backdrop.classList.add('active');
+    backdrop.setAttribute('aria-hidden', 'false');
+  }
+}
+
+function closeMenu() {
+  const sidebar = qs('#sidebarMenu');
+  const backdrop = qs('#sidebarBackdrop');
+  if (sidebar && backdrop) {
+    sidebar.classList.remove('open');
+    sidebar.setAttribute('aria-hidden', 'true');
+    backdrop.classList.remove('active');
+    backdrop.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function toggleMenu() {
+  const sidebar = qs('#sidebarMenu');
+  if (!sidebar) return;
+  if (sidebar.classList.contains('open')) {
+    closeMenu();
+  } else {
+    openMenu();
+  }
+}
+
+function watchGroupRealtime(groupId) {
+  unsubscribeRealtime();
+  if (!groupId) {
+    return;
+  }
+
+  const groupRef = doc(db, 'grupos', groupId);
+  currentGroupUnsubscribe = onSnapshot(groupRef, (snapshot) => {
+    if (window.isSyncing) {
+      return;
+    }
+
+    if (!snapshot.exists()) {
+      return;
+    }
+
+    window.isSyncing = true;
+    try {
+      const cloudData = snapshot.data() || {};
+      const nextInventory = Array.isArray(cloudData.dispensa) ? cloudData.dispensa : [];
+      const nextRecipes = Array.isArray(cloudData.receitas) ? cloudData.receitas : [];
+      const nextPlan = Array.isArray(cloudData.cardapio) ? cloudData.cardapio : [];
+      const nextShoppingList = Array.isArray(cloudData.shoppingList) ? cloudData.shoppingList : [];
+
+      let changed = false;
+
+      if (!arraysEqual(nextInventory, window.inventory)) {
+        window.inventory = nextInventory;
+        changed = true;
+      }
+      if (!arraysEqual(nextRecipes, window.recipes)) {
+        window.recipes = nextRecipes;
+        changed = true;
+      }
+      if (!arraysEqual(nextPlan, window.plan)) {
+        window.plan = nextPlan;
+        changed = true;
+      }
+      if (!arraysEqual(nextShoppingList, window.shoppingList)) {
+        window.shoppingList = nextShoppingList;
+        changed = true;
+      }
+
+      if (changed) {
+        if (qs('#m_invList')) {
+          loadModule('./modules/inventory.js', (module) => module.showInventory());
+        }
+        if (qs('#m_currentPlan')) {
+          loadModule('./modules/planning.js', (module) => module.showCurrentPlan());
+        }
+        console.log('🟢 Dados sincronizados em tempo real para o grupo', groupId);
+      }
+    } finally {
+      window.isSyncing = false;
+    }
+  }, (error) => {
+    console.error('Erro no listener em tempo real:', error);
+  });
 }
 
 function menuNameExists(menuName) {
@@ -447,18 +575,13 @@ function showAppScreen(profile) {
   if (joinScreen) joinScreen.style.display = 'none';
   if (appScreen) appScreen.style.display = 'block';
 
-  const status = qs('#userStatus');
-  if (status) {
-    status.textContent = `Olá, ${profile.name}! ${profile.menuName ? `Cardápio: ${profile.menuName}` : `Grupo: ${profile.groupId}`}`;
-  }
-
-  const groupCodeDisplay = qs('#groupCodeDisplay');
-  if (groupCodeDisplay) {
-    groupCodeDisplay.textContent = profile.groupId ? `Código da Casa: ${profile.groupId}` : '';
-  }
+  updateSidebarDetails(profile);
+  closeMenu();
 
   const logoutBtn = qs('#logoutBtn');
   if (logoutBtn) logoutBtn.style.display = 'inline-flex';
+
+  watchGroupRealtime(profile.groupId);
 }
 
 function handleShare() {
@@ -510,13 +633,14 @@ function handleShare() {
 }
 
 function handleLogout() {
+  unsubscribeRealtime();
   localStorage.removeItem(STORAGE_KEYS.USER_PROFILE);
   window.user = null;
   window.activeGroupCode = null;
   window.inventory = [];
   window.recipes = [];
   window.plan = [];
-  qs('#userStatus').textContent = '';
+  window.shoppingList = [];
   // Limpar URL params
   window.history.replaceState({}, document.title, window.location.pathname);
   loadInitialData();
@@ -609,6 +733,26 @@ function setupEventListeners() {
   if (logoutBtn) {
     logoutBtn.addEventListener('click', handleLogout);
   }
+
+  const menuToggle = qs('#menuToggle');
+  const sidebarBackdrop = qs('#sidebarBackdrop');
+
+  if (menuToggle) {
+    menuToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleMenu();
+    });
+  }
+
+  if (sidebarBackdrop) {
+    sidebarBackdrop.addEventListener('click', closeMenu);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeMenu();
+    }
+  });
 }
 
 // Service Worker
