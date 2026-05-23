@@ -81,6 +81,32 @@ function extractProductsFromHtml(html) {
     const $ = cheerio.load(html);
     const produtos = [];
 
+    const spRows = $('.tabResultados tr.lineItem, .tabResultados tr[class*="lineItem"], tr.lineItem, tr[class*="lineItem"]');
+
+    spRows.each((_, row) => {
+        const $row = $(row);
+        const name = cleanText($row.find('.txtTit, .txtTit2').first().text());
+        const qtyText = cleanText($row.find('.Rqtd').first().text());
+        const unitText = cleanText($row.find('.RUN, .RCat').first().text());
+
+        const qty = parseQty(qtyText || $row.text().match(/Qtde:\s*([0-9.,]+)/i)?.[1] || '');
+        const unit = normalizeUnit(unitText || $row.text().match(/UN\s*[:]?\s*([A-Za-z0-9]+)/i)?.[1] || '');
+
+        if (!name) {
+            return;
+        }
+
+        produtos.push({
+            name,
+            qty,
+            unit: unit || 'un'
+        });
+    });
+
+    if (produtos.length) {
+        return produtos;
+    }
+
     $('table').each((_, table) => {
         const rows = $(table).find('tr');
         if (!rows.length) return;
