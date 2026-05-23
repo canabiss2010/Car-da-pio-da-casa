@@ -11,7 +11,76 @@ const frequencyLevels = [
   { level: 5, percentage: 90, label: 'Muito Frequente' }
 ];
 
+const MACRO_TAGS = [
+  { key: 'carbo', label: '🌾 Carboidratos' },
+  { key: 'proteina', label: '🥩 Proteínas' },
+  { key: 'vegetais', label: '🥦 Vegetais' },
+  { key: 'gordura', label: '🥑 Gorduras' }
+];
+
 let currentEditIndex = -1;
+let selectedMacros = new Set();
+
+function getMacroShare() {
+  const count = selectedMacros.size;
+  return count === 0 ? 0 : Number((100 / count).toFixed(2));
+}
+
+function getMacroValues() {
+  const share = getMacroShare();
+  return {
+    carbo: selectedMacros.has('carbo') ? share : 0,
+    proteina: selectedMacros.has('proteina') ? share : 0,
+    vegetais: selectedMacros.has('vegetais') ? share : 0,
+    gordura: selectedMacros.has('gordura') ? share : 0
+  };
+}
+
+function normalizeMacroSelection(input = {}) {
+  const next = new Set();
+
+  if (input && typeof input === 'object') {
+    if (input.carbo || input.carboidrato) next.add('carbo');
+    if (input.proteina) next.add('proteina');
+    if (input.vegetais) next.add('vegetais');
+    if (input.gordura || input.outros) next.add('gordura');
+  }
+
+  return next;
+}
+
+function setMacroTagButtonState() {
+  const buttons = document.querySelectorAll('[data-macro-tag]');
+  buttons.forEach(button => {
+    const key = button.dataset.macroTag;
+    const isActive = selectedMacros.has(key);
+
+    button.style.background = isActive ? '#4f46e5' : '#f3f4f6';
+    button.style.color = isActive ? '#ffffff' : '#111827';
+    button.style.border = `1px solid ${isActive ? '#4f46e5' : '#d1d5db'}`;
+    button.style.borderRadius = '999px';
+    button.style.padding = '6px 12px';
+    button.style.fontSize = '0.92rem';
+    button.style.fontWeight = '700';
+    button.style.cursor = 'pointer';
+  });
+}
+
+function toggleMacroTag(key) {
+  if (selectedMacros.has(key)) {
+    selectedMacros.delete(key);
+  } else {
+    selectedMacros.add(key);
+  }
+
+  setMacroTagButtonState();
+}
+
+function resetMacroSelection() {
+  selectedMacros = new Set();
+  setMacroTagButtonState();
+}
+
 export function showRecipes() {
   const html = `
     <div style="margin-bottom: 16px">
@@ -45,16 +114,29 @@ export function showRecipes() {
         <!-- box de sugestões de ingrediente, posicionada dentro da caixa -->
         <ul id="ingredientSuggestions" class="suggestions"></ul>
       </div>
-      <div style="display:flex;gap:8px;margin-top:8px">
+      <div style="margin-top:12px">
+        <div style="margin-bottom:8px">
+          <strong>Classificar macros</strong>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${MACRO_TAGS.map(tag => `
+            <button type="button" data-macro-tag="${tag.key}" style="background:#f3f4f6;color:#111827;border:1px solid #d1d5db;border-radius:999px;padding:6px 12px;font-size:0.92rem;font-weight:700;cursor:pointer">
+              ${tag.label}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px">
         <button id="m_addRec" class="btn">Salvar Receita</button>
         <button id="m_clearRec" class="btn-ghost">Limpar</button>
       </div>
     </div>
     <div id="m_recList" class="list"></div>
   `;
+  selectedMacros = new Set();
   openModal('Receitas', html);
+  setMacroTagButtonState();
   renderRecipeList();
-  // ativa autocomplete de ingredientes
   setupIngredientAutocomplete();
 }
 
@@ -167,10 +249,15 @@ function showRecipeDetails(recipe) {
   if (!recipe) return;
 
   const freqInfo = frequencyLevels.find(f => f.level === (recipe.frequency || 3)) || frequencyLevels[2];
+  const macros = recipe.macros || { carbo: 0, proteina: 0, vegetais: 0, gordura: 0 };
 
   const ingredientsHtml = recipe.ingredients && recipe.ingredients.length > 0
     ? recipe.ingredients.map(ing => `<li>${ing.name}: ${ing.qty}${ing.unit}</li>`).join('')
     : '<li>Nenhum ingrediente cadastrado</li>';
+
+  const macrosHtml = MACRO_TAGS
+    .map(tag => `<li>${tag.label}: ${macros[tag.key] || 0}%</li>`)
+    .join('');
 
   const html = `
     <div style="padding: 16px;">
@@ -186,6 +273,13 @@ function showRecipeDetails(recipe) {
           <span><strong>Frequência:</strong></span>
           <span>${freqInfo.label}</span>
         </div>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <strong style="margin-bottom: 8px; display: block;">Macros:</strong>
+        <ul style="margin: 0; padding-left: 20px; background: #f9f9f9; padding: 12px; border-radius: 6px; border-left: 3px solid var(--accent);">
+          ${macrosHtml}
+        </ul>
       </div>
 
       <div>
@@ -233,6 +327,9 @@ function loadRecipeForEdit(idx) {
   if (servingsInput) servingsInput.value = recipe.servings || 4;
   if (categorySelect) categorySelect.value = recipe.category || 'verdura';
   if (frequencySelect) frequencySelect.value = recipe.frequency || 3;
+
+  selectedMacros = normalizeMacroSelection(recipe.macros || {});
+  setMacroTagButtonState();
 
   // Preenche os ingredientes
   if (ingredientsTextarea) {
@@ -418,6 +515,13 @@ function setupIngredientAutocomplete() {
 }
 
 document.addEventListener('click', (e) => {
+  const macroTagButton = e.target.closest('[data-macro-tag]');
+
+  if (macroTagButton) {
+    e.preventDefault();
+    toggleMacroTag(macroTagButton.dataset.macroTag);
+    return;
+  }
 
   // Salvar receita
   if (e.target.id === 'm_addRec') {
@@ -536,15 +640,18 @@ document.addEventListener('click', (e) => {
 
     const frequency = parseInt(frequencyValue);
     const category = categoryValue;
+    const isEditing = currentEditIndex >= 0;
+    const macros = getMacroValues();
     const recipe = {
       name,
       frequency,
       servings,
       category,
-      ingredients
+      ingredients,
+      macros
     };
 
-    if (currentEditIndex >= 0) {
+    if (isEditing) {
       // Se está editando, substitui a receita existente
       window.recipes.splice(currentEditIndex, 0, recipe);
       currentEditIndex = -1;
@@ -562,10 +669,11 @@ document.addEventListener('click', (e) => {
     qs('#m_recFrequency').value = '';
     qs('#m_recCategory').value = '';
     qs('#m_recIngredients').value = '';
+    resetMacroSelection();
     currentEditIndex = -1;
 
     renderRecipeList();
-    setAlert(`Receita ${currentEditIndex >= 0 ? 'atualizada' : 'salva'}: ${name}`, 'success');
+    setAlert(`Receita ${isEditing ? 'atualizada' : 'salva'}: ${name}`, 'success');
   }
 
   // Limpar formulário
@@ -576,6 +684,7 @@ document.addEventListener('click', (e) => {
       qs('#m_recFrequency').value = '';
       qs('#m_recCategory').value = '';
       qs('#m_recIngredients').value = '';
+      resetMacroSelection();
       currentEditIndex = -1;
     }
   }
