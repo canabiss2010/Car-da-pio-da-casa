@@ -6,8 +6,28 @@ function normalizeShoppingName(name) {
   return String(name || '').trim();
 }
 
+function normalizeComparableName(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function normalizeComparableUnit(unit = 'un') {
+  return normalizeUnit(1, unit)?.unit || 'un';
+}
+
+function getIngredientCandidates(ingredient = {}) {
+  const rawCandidates = [ingredient.name, ...(Array.isArray(ingredient.alternatives) ? ingredient.alternatives : [])];
+  return rawCandidates
+    .map(candidate => normalizeComparableName(candidate))
+    .filter(Boolean);
+}
+
 function shoppingItemKey(name, unit = 'un') {
-  const normalizedUnit = normalizeUnit(unit) || 'un';
+  const normalizedUnit = normalizeComparableUnit(unit);
   return `${normalizeShoppingName(name).toLowerCase()}|${normalizedUnit}`;
 }
 
@@ -28,7 +48,7 @@ function addOrUpdateShoppingListItem(name, qty, unit = 'un', note = '') {
   const finalName = normalizeShoppingName(name);
   if (!finalName) return null;
 
-  const normalizedUnit = normalizeUnit(unit) || 'un';
+  const normalizedUnit = normalizeComparableUnit(unit);
   const amount = Math.max(0, Number(qty) || 0);
   if (amount <= 0) return null;
 
@@ -89,6 +109,19 @@ export function clearShoppingList() {
   return getShoppingList();
 }
 
+export function resolveAvailableInventoryIngredient(ingredient = {}, inventory = window.inventory) {
+  if (!Array.isArray(inventory)) return null;
+
+  const unit = normalizeComparableUnit(ingredient.unit);
+  const candidates = getIngredientCandidates(ingredient);
+
+  return inventory.find(item => {
+    const candidateName = normalizeComparableName(item.name);
+    const itemUnit = normalizeComparableUnit(item.unit);
+    return candidates.includes(candidateName) && itemUnit === unit;
+  }) || null;
+}
+
 export function getPlanIngredientItems(plan = window.plan, people = window.planMeta?.people || 4) {
   if (!plan || plan.length === 0) return [];
 
@@ -101,7 +134,7 @@ export function getPlanIngredientItems(plan = window.plan, people = window.planM
       const portionScale = people / recipeServings;
 
       meal.recipe.ingredients.forEach(ingredient => {
-        const normalizedUnit = normalizeUnit(ingredient.unit) || 'un';
+        const normalizedUnit = normalizeComparableUnit(ingredient.unit);
         const ingredientName = normalizeShoppingName(ingredient.name);
         if (!ingredientName) return;
 
@@ -134,7 +167,7 @@ export function getPlanMissingItems(plan = window.plan, people = window.planMeta
       const portionScale = people / recipeServings;
 
       meal.recipe.ingredients.forEach(ingredient => {
-        const normalizedUnit = normalizeUnit(ingredient.unit) || 'un';
+        const normalizedUnit = normalizeComparableUnit(ingredient.unit);
         const ingredientName = normalizeShoppingName(ingredient.name);
         if (!ingredientName) return;
 
@@ -143,26 +176,30 @@ export function getPlanMissingItems(plan = window.plan, people = window.planMeta
           missingMap[key] = {
             name: ingredientName,
             unit: normalizedUnit,
-            qty: 0
+            qty: 0,
+            matchedInventoryItem: null
           };
         }
 
-        missingMap[key].qty += (Number(ingredient.qty) || 0) * portionScale;
+        const requiredQty = (Number(ingredient.qty) || 0) * portionScale;
+        missingMap[key].qty += requiredQty;
+
+        if (!missingMap[key].matchedInventoryItem) {
+          missingMap[key].matchedInventoryItem = resolveAvailableInventoryIngredient(ingredient, window.inventory);
+        }
       });
     });
   });
 
   Object.values(missingMap).forEach(item => {
-    const inventoryItem = window.inventory?.find(inv =>
-      normalizeShoppingName(inv.name).toLowerCase() === item.name.toLowerCase() &&
-      normalizeUnit(inv.unit) === item.unit
-    );
-    if (inventoryItem) {
-      item.qty = Math.max(0, item.qty - (Number(inventoryItem.qty) || 0));
+    if (item.matchedInventoryItem) {
+      item.qty = Math.max(0, item.qty - (Number(item.matchedInventoryItem.qty) || 0));
     }
   });
 
-  return Object.values(missingMap).filter(item => item.qty > 0);
+  return Object.values(missingMap)
+    .filter(item => item.qty > 0)
+    .map(({ matchedInventoryItem, ...item }) => item);
 }
 
 export function showShoppingList() {

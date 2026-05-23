@@ -21,6 +21,70 @@ const MACRO_TAGS = [
 let currentEditIndex = -1;
 let selectedMacros = new Set();
 
+function normalizeIngredientText(value) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function splitIngredientAlternatives(value = '') {
+  const parts = String(value || '')
+    .split('||')
+    .map(part => normalizeIngredientText(part))
+    .filter(Boolean);
+
+  if (parts.length === 0) {
+    return { primary: '', alternatives: [] };
+  }
+
+  return {
+    primary: parts[0],
+    alternatives: parts.slice(1)
+  };
+}
+
+function formatIngredientForTextarea(ingredient = {}) {
+  const parts = [ingredient.name || ''];
+  if (Array.isArray(ingredient.alternatives) && ingredient.alternatives.length > 0) {
+    parts.push(...ingredient.alternatives);
+  }
+  return parts.filter(Boolean).join(' || ');
+}
+
+function ensureInventoryItemsForRecipe(ingredients = []) {
+  if (!Array.isArray(window.inventory)) {
+    window.inventory = [];
+  }
+
+  const created = [];
+
+  ingredients.forEach(ingredient => {
+    const primaryName = normalizeIngredientText(ingredient.name);
+    if (!primaryName) {
+      return;
+    }
+
+    const existing = window.inventory.find(item =>
+      normalizeIngredientText(item.name) === primaryName && String(item.unit || '').toLowerCase() === String(ingredient.unit || '').toLowerCase()
+    );
+
+    if (!existing) {
+      window.inventory.push({
+        name: primaryName,
+        qty: 0,
+        unit: ingredient.unit || 'un',
+        category: 'outros'
+      });
+      created.push(primaryName);
+    }
+  });
+
+  return created;
+}
+
 function getMacroShare() {
   const count = selectedMacros.size;
   return count === 0 ? 0 : Number((100 / count).toFixed(2));
@@ -252,7 +316,7 @@ function showRecipeDetails(recipe) {
   const macros = recipe.macros || { carbo: 0, proteina: 0, vegetais: 0, gordura: 0 };
 
   const ingredientsHtml = recipe.ingredients && recipe.ingredients.length > 0
-    ? recipe.ingredients.map(ing => `<li>${ing.name}: ${ing.qty}${ing.unit}</li>`).join('')
+    ? recipe.ingredients.map(ing => `<li>${formatIngredientForTextarea(ing)}: ${ing.qty} ${ing.unit}</li>`).join('')
     : '<li>Nenhum ingrediente cadastrado</li>';
 
   const macrosHtml = MACRO_TAGS
@@ -335,7 +399,7 @@ function loadRecipeForEdit(idx) {
   if (ingredientsTextarea) {
     ingredientsTextarea.value = recipe.ingredients
       .map(ing => {
-        const name = ing.name || '';
+        const name = formatIngredientForTextarea(ing);
         const qty = typeof ing.qty !== 'undefined' ? ing.qty : '';
         const unit = ing.unit || '';
         return `${name},${qty},${unit}`;
@@ -616,9 +680,11 @@ document.addEventListener('click', (e) => {
 
         // Normaliza a unidade antes de salvar
         const normalized = normalizeUnit(quantity, unit || 'un');
+        const { primary, alternatives } = splitIngredientAlternatives(name);
 
         return {
-          name: name.toLowerCase(),
+          name: primary,
+          alternatives: alternatives.length > 0 ? alternatives : undefined,
           qty: normalized.qty,
           unit: normalized.unit
         };
@@ -660,8 +726,13 @@ document.addEventListener('click', (e) => {
       window.recipes.push(recipe);
     }
 
-    window.saveAll();
+    const createdIngredients = ensureInventoryItemsForRecipe(ingredients);
     clearAlerts();
+    if (createdIngredients.length > 0) {
+      setAlert('Detectamos ingredientes novos! Eles foram adicionados à sua despensa com quantidade zero para ajudar na sua próxima lista de compras.', 'info', 0);
+    }
+
+    window.saveAll();
 
     // Limpa o formulário
     qs('#m_recName').value = '';

@@ -7,7 +7,9 @@ import {
   getShoppingList,
   addToShoppingList,
   removeFromShoppingList,
-  clearShoppingList
+  clearShoppingList,
+  getPlanMissingItems,
+  resolveAvailableInventoryIngredient
 } from './shoppingList.js';
 
 // Escala de frequência
@@ -54,11 +56,7 @@ function applyPlanToInventory(plan, people) {
         // Quantidade a descontar (proporcional ao número de pessoas)
         const quantityToRemove = ingredient.qty * portionScale;
 
-        // Procura o item no estoque (case-insensitive)
-        const inventoryItem = window.inventory.find(item =>
-          item.name.toLowerCase() === ingredient.name.toLowerCase() &&
-          item.unit === ingredient.unit
-        );
+        const inventoryItem = resolveAvailableInventoryIngredient(ingredient, window.inventory);
 
         if (inventoryItem) {
           // Desconta do estoque
