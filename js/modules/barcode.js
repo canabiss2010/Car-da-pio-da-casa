@@ -72,9 +72,7 @@ class BarcodeScanner {
 
       if (qrCode) {
         this.lastScannedCode = qrCode;
-        this.stopCamera();
-        this.showScannerStatus('Nota Fiscal detectada com sucesso!');
-        setAlert('Nota Fiscal detectada com sucesso!', 'success');
+        await this.processNotaFiscal(qrCode);
         return;
       }
     } catch (error) {
@@ -82,6 +80,42 @@ class BarcodeScanner {
     }
 
     this.scanAnimationFrame = requestAnimationFrame(() => this.scanForCodes());
+  }
+
+  async processNotaFiscal(url) {
+    this.stopCamera();
+    this.showScannerStatus('Processando Nota Fiscal... (Pode demorar até 1 minuto para o servidor acordar)');
+
+    try {
+      const response = await fetch('https://car-da-pio-da-casa.onrender.com/raspar-nota', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ url })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data?.sucesso) {
+        const erro = data?.erro || `Erro ao processar a nota (${response.status}).`;
+        throw new Error(erro);
+      }
+
+      const produtos = Array.isArray(data.produtos) ? data.produtos : [];
+
+      if (!produtos.length) {
+        throw new Error('Nenhum produto foi retornado pela nota fiscal.');
+      }
+
+      produtos.forEach((produto) => this.addToInventory(produto));
+      this.showScannerStatus('Produtos adicionados com sucesso.');
+      setAlert('Todos os produtos da nota foram adicionados à despensa!', 'success');
+    } catch (error) {
+      const mensagem = error?.message || 'Erro ao processar a nota fiscal.';
+      this.showScannerStatus(mensagem);
+      setAlert(mensagem, 'error');
+    }
   }
 
   stopCamera() {
