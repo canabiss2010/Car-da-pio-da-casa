@@ -8,7 +8,107 @@ class BarcodeScanner {
     this.onBarcodeScanned = null;
     this.buffer = '';
     this.lastScannedCode = '';
+    this.videoElement = null;
+    this.stream = null;
+    this.barcodeDetector = null;
+    this.scanAnimationFrame = null;
+    this.isScanning = false;
     this.setupKeyboardListener();
+  }
+
+  async startCamera() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      console.warn('⚠️ A API getUserMedia não está disponível neste navegador.');
+      setAlert('Este navegador não suporta câmera nativa para leitura de QR Code.', 'error');
+      return;
+    }
+
+    if (!('BarcodeDetector' in window)) {
+      console.warn('⚠️ A API BarcodeDetector não está disponível neste navegador.');
+      setAlert('Seu navegador não suporta leitura de QR Code com câmera nativa.', 'error');
+      return;
+    }
+
+    this.stopCamera();
+
+    this.videoElement = qs('#scanner-video');
+    if (!this.videoElement) {
+      return;
+    }
+
+    try {
+      this.barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
+      this.stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      });
+
+      this.videoElement.srcObject = this.stream;
+      await this.videoElement.play();
+      this.isScanning = true;
+      this.showScannerStatus('Aponte a câmera para o QR Code da nota fiscal.');
+      this.scanForCodes();
+    } catch (error) {
+      console.error('❌ Não foi possível acessar a câmera:', error);
+      this.stopCamera();
+      setAlert('Não foi possível acessar a câmera. Verifique as permissões e tente novamente.', 'error');
+    }
+  }
+
+  async scanForCodes() {
+    if (!this.isScanning || !this.videoElement || !this.barcodeDetector) {
+      return;
+    }
+
+    const video = this.videoElement;
+
+    if (video.readyState < 2) {
+      this.scanAnimationFrame = requestAnimationFrame(() => this.scanForCodes());
+      return;
+    }
+
+    try {
+      const detectedCodes = await this.barcodeDetector.detect(video);
+      const qrCode = detectedCodes?.[0]?.rawValue?.trim();
+
+      if (qrCode) {
+        this.lastScannedCode = qrCode;
+        this.stopCamera();
+        this.showScannerStatus('Nota Fiscal detectada com sucesso!');
+        setAlert('Nota Fiscal detectada com sucesso!', 'success');
+        return;
+      }
+    } catch (error) {
+      console.warn('⚠️ Falha ao detectar QR Code:', error);
+    }
+
+    this.scanAnimationFrame = requestAnimationFrame(() => this.scanForCodes());
+  }
+
+  stopCamera() {
+    this.isScanning = false;
+
+    if (this.scanAnimationFrame) {
+      cancelAnimationFrame(this.scanAnimationFrame);
+      this.scanAnimationFrame = null;
+    }
+
+    if (this.stream) {
+      this.stream.getTracks().forEach(track => track.stop());
+      this.stream = null;
+    }
+
+    if (this.videoElement) {
+      this.videoElement.srcObject = null;
+    }
+
+    this.barcodeDetector = null;
+  }
+
+  showScannerStatus(message) {
+    const statusNode = qs('#scanner-status');
+    if (statusNode) {
+      statusNode.textContent = message;
+    }
   }
 
   // Configura o listener do teclado para capturar os códigos
@@ -62,6 +162,47 @@ class BarcodeScanner {
     return window.inventory?.find(item => item.barcode === code);
   }
 
+  normalizeText(value) {
+    return String(value ?? '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ');
+  }
+
+  normalizeCategory(value) {
+    const normalized = this.normalizeText(value);
+    return normalized || 'outros';
+  }
+
+  buildNormalizedProduct(rawProduct = {}, fallback = {}) {
+    const normalizedQty = normalizeUnit(Number(rawProduct.qty ?? fallback.qty ?? 0), rawProduct.unit ?? fallback.unit ?? 'un');
+    const product = {
+      category: this.normalizeCategory(rawProduct.category ?? fallback.category ?? 'outros'),
+      name: this.normalizeText(rawProduct.name ?? fallback.name ?? ''),
+      brand: this.normalizeText(rawProduct.brand ?? fallback.brand ?? ''),
+      qty: normalizedQty?.qty ?? 0,
+      unit: normalizedQty?.unit ?? 'un',
+      barcode: String(rawProduct.barcode ?? fallback.barcode ?? '')
+    };
+
+    return product;
+  }
+
+  findExistingInventoryItem(product) {
+    if (!Array.isArray(window.inventory)) return null;
+
+    return window.inventory.find(item => {
+      const existingName = this.normalizeText(item.name);
+      const existingBrand = this.normalizeText(item.brand || '');
+      const incomingName = this.normalizeText(product.name);
+      const incomingBrand = this.normalizeText(product.brand || '');
+
+      return existingName === incomingName && existingBrand === incomingBrand;
+    });
+  }
+
   showProductInfo(product = null) {
     let infoHtml = '';
 
@@ -105,6 +246,18 @@ class BarcodeScanner {
                      placeholder="Nome do produto" 
                      style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
             </div>
+            <div style="margin-bottom: 12px;">
+              <input type="text" 
+                     id="newProductBrand" 
+                     placeholder="Marca (opcional)" 
+                     style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            <div style="margin-bottom: 12px;">
+              <input type="text" 
+                     id="newProductCategory" 
+                     placeholder="Categoria (ex: laticinios)" 
+                     style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
             <div style="display: flex; gap: 8px;">
               <input type="text" 
                      id="newProductQty" 
@@ -113,11 +266,9 @@ class BarcodeScanner {
                      style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
               <select id="newProductUnit" 
                       style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; background: white;">
-                <option value="Litro">Litro</option>
-                <option value="Kg">Kg</option>
-                <option value="Grama">Grama</option>
-                <option value="Ml">Ml</option>
-                <option value="Unidade" selected>Unidade</option>
+                <option value="g">g</option>
+                <option value="ml">ml</option>
+                <option value="un" selected>un</option>
               </select>
             </div>
             <button id="saveProductBtn" 
@@ -177,6 +328,18 @@ class BarcodeScanner {
                  placeholder="Nome do produto" 
                  style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
         </div>
+        <div style="margin-bottom: 12px;">
+          <input type="text" 
+                 id="newProductBrand" 
+                 placeholder="Marca (opcional)" 
+                 style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <div style="margin-bottom: 12px;">
+          <input type="text" 
+                 id="newProductCategory" 
+                 placeholder="Categoria (ex: laticinios)" 
+                 style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
         <div style="display: flex; gap: 8px;">
           <input type="text" 
                  id="newProductQty" 
@@ -185,11 +348,9 @@ class BarcodeScanner {
                  style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
           <select id="newProductUnit" 
                  style="padding: 10px; border: 1px solid #ddd; border-radius: 4px; background: white;">
-            <option value="Litro">Litro</option>
-            <option value="Kg">Kg</option>
-            <option value="Grama">Grama</option>
-            <option value="Ml">Ml</option>
-            <option value="Unidade" selected>Unidade</option>
+            <option value="g">g</option>
+            <option value="ml">ml</option>
+            <option value="un" selected>un</option>
           </select>
         </div>
         <button id="saveProductBtn" 
@@ -207,13 +368,11 @@ class BarcodeScanner {
       infoDiv.outerHTML = formHtml;
       qs('#saveProductBtn')?.addEventListener('click', () => this.saveNewProduct());
 
-      // Valida o campo de quantidade para aceitar apenas números, ponto e vírgula
       setTimeout(() => {
         const qtyInput = qs('#newProductQty');
         if (qtyInput) {
           qtyInput.addEventListener('keypress', (e) => {
             const char = String.fromCharCode(e.which);
-            // Aceita apenas números, ponto (.) e vírgula (,)
             if (!/[0-9.,]/.test(char)) {
               e.preventDefault();
             }
@@ -226,46 +385,31 @@ class BarcodeScanner {
   addToInventory(product) {
     if (!window.inventory) window.inventory = [];
 
-    // Busca o produto original (sem afetar o estoque)
     const originalProduct = this.findProductByBarcode(product.barcode) || product;
-    let packageQty = parseFloat(originalProduct.qty);
-    let unit = originalProduct.unit;
+    const normalizedProduct = this.buildNormalizedProduct(originalProduct, {
+      name: product.name,
+      qty: product.qty,
+      unit: product.unit,
+      barcode: product.barcode
+    });
 
-    // Normaliza a unidade se necessário (retrocompatibilidade)
-    const normalized = normalizeUnit(packageQty, unit);
-    packageQty = normalized.qty;
-    unit = normalized.unit;
-
-    // Encontra o item no inventário
-    const existingItem = window.inventory.find(item =>
-      item.barcode === product.barcode
-    );
+    const existingItem = this.findExistingInventoryItem(normalizedProduct);
 
     if (existingItem) {
-      // Soma a quantidade da embalagem ao estoque existente
-      const currentQty = parseFloat(existingItem.qty) || 0;
-      existingItem.qty = currentQty + packageQty;
+      const currentQty = Number(existingItem.qty) || 0;
+      existingItem.qty = currentQty + Number(normalizedProduct.qty || 0);
+      existingItem.unit = normalizedProduct.unit;
+      existingItem.category = normalizedProduct.category || existingItem.category || 'outros';
+      existingItem.brand = normalizedProduct.brand || existingItem.brand || '';
     } else {
-      // Se não existe, adiciona o produto com a quantidade da embalagem
-      const newItem = {
-        ...originalProduct,
-        qty: packageQty,
-        unit: unit,
-        originalName: originalProduct.originalName || originalProduct.name,
-        normalizedName: (originalProduct.normalizedName || originalProduct.name)
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-      };
-      window.inventory.push(newItem);
+      window.inventory.push(normalizedProduct);
     }
 
-    // Mostra mensagem de sucesso
     const successHtml = `
     <div id="productInfo" style="margin-top: 20px;">
       <div style="padding: 8px; background: #e8f5e9; color: #2e7d32; 
                  border-radius: 4px; margin-bottom: 16px; font-size: 14px;">
-        ✅ ${product.name} ${packageQty}${unit} adicionado com sucesso
+        ✅ ${normalizedProduct.name} ${normalizedProduct.qty}${normalizedProduct.unit} adicionado com sucesso
       </div>
     </div>
   `;
@@ -280,22 +424,21 @@ class BarcodeScanner {
       }
     }
 
-    // Limpa o campo de input
     const input = qs('#barcodeInput');
     if (input) {
       input.value = '';
       input.focus();
     }
 
-    // Atualiza os dados
     if (window.saveAll) window.saveAll();
     if (window.renderList) window.renderList();
   }
 
   saveNewProduct() {
     const name = qs('#newProductName')?.value.trim();
+    const brand = qs('#newProductBrand')?.value.trim();
+    const category = qs('#newProductCategory')?.value.trim();
     let qtyValue = qs('#newProductQty')?.value.trim() || '';
-    // Converte vírgula em ponto antes de fazer parseFloat
     qtyValue = qtyValue.replace(',', '.');
     const qty = parseFloat(qtyValue);
     const unit = qs('#newProductUnit')?.value;
@@ -306,37 +449,38 @@ class BarcodeScanner {
       return;
     }
 
-    // Normaliza a unidade antes de salvar
-    const normalized = normalizeUnit(qty, unit);
-
-    const newProduct = {
-      barcode,
-      name,
-      qty: normalized.qty,
-      unit: normalized.unit,
-      originalName: name,
-      normalizedName: name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    };
-
-    // Inicializa o inventário se não existir
     if (!window.inventory) window.inventory = [];
 
-    // Remove o produto se já existir (para evitar duplicatas)
-    window.inventory = window.inventory.filter(item => item.barcode !== barcode);
+    const newProduct = this.buildNormalizedProduct(
+      {
+        name,
+        brand,
+        category,
+        qty,
+        unit,
+        barcode
+      },
+      { name, brand, category, barcode }
+    );
 
-    // Adiciona o novo produto
-    window.inventory.push(newProduct);
+    const existingItem = this.findExistingInventoryItem(newProduct);
 
-    // Salva os dados
+    if (existingItem) {
+      existingItem.qty = Number(existingItem.qty || 0) + Number(newProduct.qty || 0);
+      existingItem.unit = newProduct.unit;
+      existingItem.brand = newProduct.brand || existingItem.brand || '';
+      existingItem.category = newProduct.category || existingItem.category || 'outros';
+    } else {
+      window.inventory.push(newProduct);
+    }
+
     if (window.saveAll) {
       window.saveAll();
     }
 
-    // Atualiza a interface
     this.showProductInfo(newProduct);
     setAlert('Produto cadastrado com sucesso!', 'success');
 
-    // Atualiza a lista de itens na tela
     if (window.renderList) {
       window.renderList();
     }
@@ -346,36 +490,21 @@ class BarcodeScanner {
     const html = `
       <div class="barcode-scanner-content">
         <div class="scanner-instruction" style="margin-bottom: 16px;">
-          Escaneie o código de barras
+          Aponte a câmera para o QR Code da nota fiscal
         </div>
-        <div class="scanner-input">
-          <input type="text" 
-                 id="barcodeInput" 
-                 placeholder="Clique aqui e escaneie o código" 
-                 class="barcode-input" 
-                 style="text-align: center; width: 100%; padding: 12px; font-size: 16px; 
-                        border: 1px solid #ddd; border-radius: 4px; margin: 8px 0 16px 0;">
+        <div style="display: flex; justify-content: center; margin-bottom: 16px;">
+          <video id="scanner-video" autoplay playsinline style="width: 100%; max-width: 400px; border-radius: 8px; background: #000;"></video>
+        </div>
+        <div id="scanner-status" style="padding: 12px; border-radius: 8px; background: #f5f5f5; color: #333; font-size: 14px; line-height: 1.4;">
+          Inicializando câmera...
         </div>
         <div id="productInfo"></div>
       </div>
     `;
 
-    openModal('Leitor de Código de Barras', html);
-
-    const input = qs('#barcodeInput');
-    if (input) {
-      input.readOnly = false;
-      input.focus();
-      input.select();
-
-      // Processa automaticamente quando o código for digitado
-      input.addEventListener('input', (e) => {
-        const code = e.target.value.trim();
-        if (code) {
-          this.handleBarcodeScanned(code);
-        }
-      });
-    }
+    openModal('Leitor de QR Code', html);
+    this.stopCamera();
+    this.startCamera();
   }
 }
 
