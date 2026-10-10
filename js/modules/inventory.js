@@ -9,8 +9,8 @@ export function showInventory() {
   const html = `
 
     <button id="startBarcode" class="btn" style="width: 100%; margin-bottom: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 10px; font-size: 0.95em; font-weight: 500; height: 44px; box-sizing: border-box;">
-      <span style="font-size: 1.2em; line-height: 1;">📷</span>
-      <span>Ler Código de Barras</span>
+      <span style="font-size: 1.2em; line-height: 1;">🧾</span>
+      <span>Ler QR Code da Nota Fiscal</span>
     </button>
 
     <label style="font-size: 1.1em; display: block; margin-bottom: 8px;">Adicione manualmente</label>
@@ -70,7 +70,7 @@ export function showInventory() {
   renderList();
   setupSearch();
 
-  // Configura o evento do botão de código de barras
+  // Configura o evento do botão de leitura do QR Code da nota fiscal
   const barcodeBtn = qs('#startBarcode');
   if (barcodeBtn) {
     barcodeBtn.addEventListener('click', () => barcodeScanner.openScanner());

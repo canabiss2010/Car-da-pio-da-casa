@@ -3,6 +3,39 @@ import { qs } from './utils.js';
 import { openModal, closeModal, setAlert } from './ui.js';
 import { normalizeUnit } from './unitNormalizer.js';
 
+const NOTA_API_URL = 'https://car-da-pio-da-casa.onrender.com/raspar-nota';
+const NOTA_TIMEOUT_MS = 90000; // o servidor gratuito do Render pode levar ~1 min para acordar
+const SCAN_INTERVAL_MS = 200;
+const JSQR_URL = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+
+let jsQRPromise = null;
+
+// Carrega o jsQR sob demanda, para navegadores sem BarcodeDetector (iPhone, Firefox, Chrome no Windows)
+function loadJsQR() {
+  if (window.jsQR) return Promise.resolve(window.jsQR);
+
+  if (!jsQRPromise) {
+    jsQRPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = JSQR_URL;
+      script.onload = () => resolve(window.jsQR);
+      script.onerror = () => {
+        jsQRPromise = null;
+        reject(new Error('Não foi possível carregar o leitor de QR Code. Verifique sua internet.'));
+      };
+      document.head.appendChild(script);
+    });
+  }
+
+  return jsQRPromise;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[char]));
+}
+
 class BarcodeScanner {
   constructor() {
     this.onBarcodeScanned = null;
@@ -10,8 +43,8 @@ class BarcodeScanner {
     this.lastScannedCode = '';
     this.videoElement = null;
     this.stream = null;
-    this.barcodeDetector = null;
-    this.scanAnimationFrame = null;
+    this.detectQrCode = null;
+    this.scanTimer = null;
     this.isScanning = false;
     this.setupKeyboardListener();
   }
@@ -19,13 +52,8 @@ class BarcodeScanner {
   async startCamera() {
     if (!navigator.mediaDevices?.getUserMedia) {
       console.warn('⚠️ A API getUserMedia não está disponível neste navegador.');
-      setAlert('Este navegador não suporta câmera nativa para leitura de QR Code.', 'error');
-      return;
-    }
-
-    if (!('BarcodeDetector' in window)) {
-      console.warn('⚠️ A API BarcodeDetector não está disponível neste navegador.');
-      setAlert('Seu navegador não suporta leitura de QR Code com câmera nativa.', 'error');
+      this.showScannerStatus('Este navegador não permite usar a câmera. Abra o app pelo navegador do celular (Chrome ou Safari) usando https.');
+      setAlert('Este navegador não suporta câmera para leitura de QR Code.', 'error');
       return;
     }
 
@@ -37,69 +65,166 @@ class BarcodeScanner {
     }
 
     try {
-      this.barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
+      this.detectQrCode = await this.createQrDetector();
       this.stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
       });
 
       this.videoElement.srcObject = this.stream;
       await this.videoElement.play();
       this.isScanning = true;
-      this.showScannerStatus('Aponte a câmera para o QR Code da nota fiscal.');
+      this.showScannerStatus('Aponte a câmera para o QR Code da nota fiscal (fica no rodapé do cupom).');
       this.scanForCodes();
     } catch (error) {
-      console.error('❌ Não foi possível acessar a câmera:', error);
+      console.error('❌ Não foi possível iniciar o leitor:', error);
       this.stopCamera();
-      setAlert('Não foi possível acessar a câmera. Verifique as permissões e tente novamente.', 'error');
+      let mensagem = 'Não foi possível acessar a câmera. Verifique as permissões e tente novamente.';
+      if (error?.name === 'NotAllowedError') {
+        mensagem = 'Permissão da câmera negada. Libere o acesso à câmera nas configurações do navegador.';
+      } else if (error?.message?.includes('leitor de QR Code')) {
+        mensagem = error.message;
+      }
+      this.showScannerStatus(mensagem);
+      setAlert(mensagem, 'error');
     }
   }
 
+  // Usa o BarcodeDetector nativo quando existe; senão, cai para o jsQR
+  async createQrDetector() {
+    if ('BarcodeDetector' in window) {
+      try {
+        const formats = await window.BarcodeDetector.getSupportedFormats?.();
+        if (!formats || formats.includes('qr_code')) {
+          const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+          return async (video) => {
+            const codes = await detector.detect(video);
+            return codes?.[0]?.rawValue || '';
+          };
+        }
+      } catch (error) {
+        console.warn('⚠️ BarcodeDetector indisponível, usando jsQR:', error);
+      }
+    }
+
+    const jsQR = await loadJsQR();
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+
+    return async (video) => {
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      if (!width || !height) return '';
+
+      // Reduz frames muito grandes para não travar celulares mais simples
+      const scale = Math.min(1, 1000 / Math.max(width, height));
+      canvas.width = Math.round(width * scale);
+      canvas.height = Math.round(height * scale);
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const image = context.getImageData(0, 0, canvas.width, canvas.height);
+      return jsQR(image.data, image.width, image.height, { inversionAttempts: 'dontInvert' })?.data || '';
+    };
+  }
+
+  scheduleNextScan() {
+    this.scanTimer = setTimeout(() => this.scanForCodes(), SCAN_INTERVAL_MS);
+  }
+
   async scanForCodes() {
-    if (!this.isScanning || !this.videoElement || !this.barcodeDetector) {
+    if (!this.isScanning || !this.videoElement || !this.detectQrCode) {
       return;
     }
 
     const video = this.videoElement;
 
+    // O modal foi fechado: desliga a câmera
+    if (!video.isConnected) {
+      this.stopCamera();
+      return;
+    }
+
     if (video.readyState < 2) {
-      this.scanAnimationFrame = requestAnimationFrame(() => this.scanForCodes());
+      this.scheduleNextScan();
       return;
     }
 
     try {
-      const detectedCodes = await this.barcodeDetector.detect(video);
-      const qrCode = detectedCodes?.[0]?.rawValue?.trim();
+      const qrCode = (await this.detectQrCode(video))?.trim();
 
       if (qrCode) {
-        this.lastScannedCode = qrCode;
-        await this.processNotaFiscal(qrCode);
-        return;
+        const url = this.extractNotaUrl(qrCode);
+
+        if (url) {
+          this.lastScannedCode = url;
+          await this.processNotaFiscal(url);
+          return;
+        }
+
+        this.showScannerStatus('Esse QR Code não é de uma nota fiscal (NFC-e). Aponte para o QR Code impresso no cupom fiscal.');
       }
     } catch (error) {
       console.warn('⚠️ Falha ao detectar QR Code:', error);
     }
 
-    this.scanAnimationFrame = requestAnimationFrame(() => this.scanForCodes());
+    if (this.isScanning) {
+      this.scheduleNextScan();
+    }
+  }
+
+  // O QR Code da NFC-e contém a URL de consulta da SEFAZ do estado
+  extractNotaUrl(qrCode) {
+    let value = String(qrCode || '').trim();
+
+    if (!/^https?:\/\//i.test(value) && /^[\w.-]+\.gov\.br\//i.test(value)) {
+      value = `https://${value}`;
+    }
+
+    try {
+      const parsed = new URL(value);
+      return /^https?:$/.test(parsed.protocol) ? value : '';
+    } catch {
+      return '';
+    }
   }
 
   async processNotaFiscal(url) {
     this.stopCamera();
-    this.showScannerStatus('Processando Nota Fiscal... (Pode demorar até 1 minuto para o servidor acordar)');
+    this.showScannerStatus('QR Code lido! Processando a nota fiscal... (pode demorar até 1 minuto se o servidor estiver dormindo)');
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), NOTA_TIMEOUT_MS);
 
     try {
-      const response = await fetch('https://car-da-pio-da-casa.onrender.com/raspar-nota', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ url })
-      });
+      let response;
+      try {
+        response = await fetch(NOTA_API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ url }),
+          signal: controller.signal
+        });
+      } catch (error) {
+        throw new Error(error?.name === 'AbortError'
+          ? 'O servidor demorou demais para responder. Tente ler a nota novamente.'
+          : 'Sem conexão com o servidor. Verifique sua internet e tente novamente.');
+      }
 
-      const data = await response.json();
+      // Enquanto o Render acorda ele pode devolver uma página HTML em vez de JSON
+      let data = null;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error('O servidor ainda está iniciando. Aguarde alguns segundos e leia a nota novamente.');
+      }
 
       if (!response.ok || !data?.sucesso) {
-        const erro = data?.erro || `Erro ao processar a nota (${response.status}).`;
-        throw new Error(erro);
+        throw new Error(data?.erro || `Erro ao processar a nota (${response.status}).`);
       }
 
       const produtos = Array.isArray(data.produtos) ? data.produtos : [];
@@ -108,22 +233,58 @@ class BarcodeScanner {
         throw new Error('Nenhum produto foi retornado pela nota fiscal.');
       }
 
-      produtos.forEach((produto) => this.addToInventory(produto));
-      this.showScannerStatus('Produtos adicionados com sucesso.');
+      const adicionados = produtos
+        .map((produto) => this.addToInventory(produto, { silent: true }))
+        .filter(Boolean);
+
+      if (window.saveAll) window.saveAll();
+      if (window.renderList) window.renderList();
+
+      this.showScannerStatus(`${adicionados.length} produto(s) adicionado(s) à despensa.`);
+      this.showImportSummary(adicionados);
       setAlert('Todos os produtos da nota foram adicionados à despensa!', 'success');
     } catch (error) {
       const mensagem = error?.message || 'Erro ao processar a nota fiscal.';
       this.showScannerStatus(mensagem);
+      this.showRetryButton();
       setAlert(mensagem, 'error');
+    } finally {
+      clearTimeout(timeout);
     }
+  }
+
+  showImportSummary(produtos) {
+    const infoDiv = qs('#productInfo');
+    if (!infoDiv) return;
+
+    const items = produtos.map((p) => `
+      <li style="padding: 6px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; gap: 8px;">
+        <span style="text-transform: capitalize;">${escapeHtml(p.name)}</span>
+        <span style="white-space: nowrap; color: #555;">${escapeHtml(p.qty)} ${escapeHtml(p.unit)}</span>
+      </li>
+    `).join('');
+
+    infoDiv.innerHTML = `
+      <ul style="list-style: none; padding: 0; margin: 16px 0 0; max-height: 280px; overflow-y: auto;">${items}</ul>
+      <button id="scanAnotherNota" class="btn" style="width: 100%; margin-top: 12px;">Ler outra nota</button>
+    `;
+    qs('#scanAnotherNota')?.addEventListener('click', () => this.openScanner());
+  }
+
+  showRetryButton() {
+    const infoDiv = qs('#productInfo');
+    if (!infoDiv) return;
+
+    infoDiv.innerHTML = '<button id="retryNota" class="btn" style="width: 100%; margin-top: 12px;">Tentar novamente</button>';
+    qs('#retryNota')?.addEventListener('click', () => this.openScanner());
   }
 
   stopCamera() {
     this.isScanning = false;
 
-    if (this.scanAnimationFrame) {
-      cancelAnimationFrame(this.scanAnimationFrame);
-      this.scanAnimationFrame = null;
+    if (this.scanTimer) {
+      clearTimeout(this.scanTimer);
+      this.scanTimer = null;
     }
 
     if (this.stream) {
@@ -135,7 +296,7 @@ class BarcodeScanner {
       this.videoElement.srcObject = null;
     }
 
-    this.barcodeDetector = null;
+    this.detectQrCode = null;
   }
 
   showScannerStatus(message) {
@@ -193,6 +354,8 @@ class BarcodeScanner {
 
   // Encontra um produto pelo código de barras
   findProductByBarcode(code) {
+    // Sem código, não procura: senão casaria com qualquer item adicionado manualmente (sem barcode)
+    if (!code) return null;
     return window.inventory?.find(item => item.barcode === code);
   }
 
@@ -211,13 +374,15 @@ class BarcodeScanner {
   }
 
   buildNormalizedProduct(rawProduct = {}, fallback = {}) {
-    const normalizedQty = normalizeUnit(Number(rawProduct.qty ?? fallback.qty ?? 0), rawProduct.unit ?? fallback.unit ?? 'un');
+    const rawQty = Number(rawProduct.qty ?? fallback.qty ?? 0);
+    // Unidade desconhecida (cx, pct...) é tratada como unidade, mantendo a quantidade
+    const normalizedQty = normalizeUnit(rawQty, rawProduct.unit ?? fallback.unit ?? 'un') || { qty: rawQty || 0, unit: 'un' };
     const product = {
       category: this.normalizeCategory(rawProduct.category ?? fallback.category ?? 'outros'),
       name: this.normalizeText(rawProduct.name ?? fallback.name ?? ''),
       brand: this.normalizeText(rawProduct.brand ?? fallback.brand ?? ''),
-      qty: normalizedQty?.qty ?? 0,
-      unit: normalizedQty?.unit ?? 'un',
+      qty: normalizedQty.qty,
+      unit: normalizedQty.unit,
       barcode: String(rawProduct.barcode ?? fallback.barcode ?? '')
     };
 
@@ -233,7 +398,8 @@ class BarcodeScanner {
       const incomingName = this.normalizeText(product.name);
       const incomingBrand = this.normalizeText(product.brand || '');
 
-      return existingName === incomingName && existingBrand === incomingBrand;
+      // Só soma quando a unidade é a mesma (não dá pra somar 500 g com 2 un)
+      return existingName === incomingName && existingBrand === incomingBrand && item.unit === product.unit;
     });
   }
 
@@ -416,7 +582,8 @@ class BarcodeScanner {
     }
   }
 
-  addToInventory(product) {
+  // silent: usado na importação da nota, que salva e mostra o resumo uma vez só no final
+  addToInventory(product, { silent = false } = {}) {
     if (!window.inventory) window.inventory = [];
 
     const originalProduct = this.findProductByBarcode(product.barcode) || product;
@@ -438,6 +605,8 @@ class BarcodeScanner {
     } else {
       window.inventory.push(normalizedProduct);
     }
+
+    if (silent) return normalizedProduct;
 
     const successHtml = `
     <div id="productInfo" style="margin-top: 20px;">
