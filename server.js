@@ -344,6 +344,102 @@ async function fetchNotaHtml(url) {
     }
 }
 
+// ---------- IA (Google Gemini, plano gratuito) ----------
+
+const AI_UNITS = ['g', 'kg', 'ml', 'l', 'un'];
+const AI_CATEGORIES = [
+    'hortifruti', 'carnes', 'laticinios', 'graos', 'padaria', 'bebidas', 'enlatados',
+    'oleaginosas', 'temperos', 'oleos', 'acucares', 'molhos', 'lanches', 'outros'
+];
+// O primeiro é o padrão; os outros são tentados se o modelo não existir mais (Google aposenta modelos antigos)
+const AI_MODELS = [process.env.GEMINI_MODEL, 'gemini-3.1-flash-lite', 'gemini-2.5-flash-lite'].filter(Boolean);
+
+function buildAIPrompt(produtos, knownIngredients) {
+    const known = (Array.isArray(knownIngredients) ? knownIngredients : [])
+        .filter((item) => item && typeof item.name === 'string' && item.name.trim())
+        .slice(0, 500)
+        .map((item) => `- ${cleanText(item.name).slice(0, 60)} (${cleanText(String(item.unit || 'un')).slice(0, 5)})`)
+        .join('\n');
+
+    const itens = produtos
+        .map((p, i) => `${i}. "${p.original}" | qtd: ${p.qty} ${p.unit}`)
+        .join('\n');
+
+    return `Você organiza a despensa digital de um app de receitas brasileiro.
+Abaixo estão os itens de uma nota fiscal de supermercado, com nomes abreviados como o mercado imprime.
+A quantidade já foi calculada pelo sistema (peso/volume da embalagem vezes a quantidade comprada).
+
+Para cada item, devolva:
+- "nome": o nome do INGREDIENTE, genérico, em português, minúsculo, SEM marca e SEM tamanho da embalagem.
+  Ex: "BISC OREO" -> "biscoito recheado"; "LING C CERRATI" -> "linguiça calabresa"; "LTE ITALAC INTEG" -> "leite integral".
+  IMPORTANTE: se o item for o mesmo ingrediente de algum da lista "INGREDIENTES QUE O APP JÁ CONHECE", use EXATAMENTE aquele nome.
+- "qtd" e "unidade": mantenha a quantidade recebida. Unidade só pode ser: g, kg, ml, l, un.
+  Se o ingrediente conhecido usa outra unidade, converta com uma estimativa razoável (ex: 1 kg de tomate ≈ 8 un).
+- "categoria": uma destas: ${AI_CATEGORIES.join(', ')}.
+- "comida": false para o que não é comida nem bebida (limpeza, higiene, sacola, utensílios, pet), senão true.
+
+INGREDIENTES QUE O APP JÁ CONHECE (nome e unidade):
+${known || '(nenhum)'}
+
+ITENS DA NOTA:
+${itens}
+
+Responda só com JSON neste formato, um objeto por item, na mesma ordem:
+{"itens":[{"i":0,"nome":"...","qtd":0,"unidade":"g","categoria":"...","comida":true}]}`;
+}
+
+async function callGemini(prompt) {
+    let lastError = null;
+
+    for (const model of AI_MODELS) {
+        try {
+            const response = await axios.post(
+                `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+                {
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { responseMimeType: 'application/json', temperature: 0.1 }
+                },
+                {
+                    headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY },
+                    timeout: 25000
+                }
+            );
+
+            const text = response.data?.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('') || '';
+            return JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, ''));
+        } catch (error) {
+            lastError = error;
+            // Modelo inexistente/aposentado: tenta o próximo. Outros erros: desiste.
+            if (error?.response?.status !== 404) break;
+        }
+    }
+
+    throw lastError;
+}
+
+async function refineWithAI(produtos, knownIngredients) {
+    const result = await callGemini(buildAIPrompt(produtos, knownIngredients));
+    const itens = Array.isArray(result?.itens) ? result.itens : [];
+
+    return produtos.map((produto, index) => {
+        const ai = itens.find((item) => Number(item?.i) === index) || itens[index];
+        if (!ai || typeof ai.nome !== 'string' || !ai.nome.trim()) return produto;
+
+        const unit = String(ai.unidade || '').toLowerCase();
+        const qty = Number(ai.qtd);
+        const validQty = AI_UNITS.includes(unit) && Number.isFinite(qty) && qty > 0;
+
+        return {
+            ...produto,
+            name: cleanText(ai.nome).toLowerCase(),
+            qty: validQty ? round(qty) : produto.qty,
+            unit: validQty ? unit : produto.unit,
+            category: AI_CATEGORIES.includes(ai.categoria) ? ai.categoria : produto.category,
+            food: ai.comida !== false
+        };
+    });
+}
+
 app.post('/raspar-nota', async (req, res) => {
     try {
         const { url } = req.body || {};
@@ -363,9 +459,19 @@ app.post('/raspar-nota', async (req, res) => {
             });
         }
 
-        const produtos = extractProductsFromHtml(html)
+        let produtos = extractProductsFromHtml(html)
             .filter((item) => cleanText(item.name))
             .map(toAppFormat);
+
+        // Se a IA estiver configurada, ela troca os nomes abreviados pelos ingredientes do app.
+        // Se falhar por qualquer motivo, fica o resultado do dicionário.
+        if (produtos.length && process.env.GEMINI_API_KEY) {
+            try {
+                produtos = await refineWithAI(produtos, req.body?.knownIngredients);
+            } catch (error) {
+                console.error('IA indisponível, usando dicionário:', error?.response?.status || '', error?.message);
+            }
+        }
 
         if (!produtos.length) {
             return res.status(404).json({

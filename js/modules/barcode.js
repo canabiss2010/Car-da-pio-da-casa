@@ -36,28 +36,9 @@ function escapeHtml(value) {
   }[char]));
 }
 
-// Correções de nomes que a pessoa fez na revisão da nota ("BISC OREO" -> biscoito / oreo).
+// Correções de nomes que a pessoa fez depois de importar a nota ("LING C CERRATI" -> linguiça calabresa).
 // Fica só neste aparelho e guarda apenas os itens que foram corrigidos.
 const LEARNED_NAMES_KEY = 'cc_nota_nomes_pwa';
-
-const REVIEW_UNITS = ['g', 'kg', 'ml', 'l', 'un'];
-
-const REVIEW_CATEGORIES = [
-  ['hortifruti', 'Hortifrúti'],
-  ['carnes', 'Carnes, Aves, Ovo e Peixes'],
-  ['laticinios', 'Laticínios e Frios'],
-  ['graos', 'Grãos e Cereais'],
-  ['padaria', 'Padaria e Matinais'],
-  ['bebidas', 'Bebidas'],
-  ['enlatados', 'Enlatados e Conservas'],
-  ['oleaginosas', 'Oleaginosas e Sementes'],
-  ['temperos', 'Temperos e especiarias'],
-  ['oleos', 'Óleos e Gorduras'],
-  ['acucares', 'Açúcares e Ingredientes de Forno'],
-  ['molhos', 'Molhos, Condimentos e Vinagres'],
-  ['lanches', 'Lanches e Petiscos'],
-  ['outros', 'Outros']
-];
 
 function learnedNamesStorageKey() {
   const code = String(window.activeGroupCode || 'default').trim().toUpperCase();
@@ -234,7 +215,7 @@ class BarcodeScanner {
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ url }),
+          body: JSON.stringify({ url, knownIngredients: this.getKnownIngredients() }),
           signal: controller.signal
         });
       } catch (error) {
@@ -261,9 +242,7 @@ class BarcodeScanner {
         throw new Error('Nenhum produto foi retornado pela nota fiscal.');
       }
 
-      // Antes de salvar, mostra os itens para a pessoa conferir e corrigir os nomes
-      const learnedNames = this.loadLearnedNames();
-      this.showReviewScreen(produtos.map((produto) => this.applyLearnedName(produto, learnedNames)));
+      this.importProducts(produtos);
     } catch (error) {
       const mensagem = error?.message || 'Erro ao processar a nota fiscal.';
       this.showScannerStatus(mensagem);
@@ -296,24 +275,134 @@ class BarcodeScanner {
   }
 
   applyLearnedName(produto, learnedNames) {
-    const suggestion = {
-      name: produto.name || '',
-      brand: produto.brand || '',
-      category: produto.category || 'outros'
-    };
     const learned = learnedNames[this.notaKey(produto)];
+    if (!learned) return produto;
 
     return {
       ...produto,
-      ...suggestion,
-      ...(learned ? { name: learned.name, brand: learned.brand || '', category: learned.category || suggestion.category } : {}),
-      learned: Boolean(learned),
-      suggestion
+      name: learned.name || produto.name,
+      category: learned.category || produto.category,
+      food: true
     };
   }
 
-  showReviewScreen(produtos) {
-    this.reviewProdutos = produtos;
+  rememberName(produto, value) {
+    const learnedNames = this.loadLearnedNames();
+    learnedNames[this.notaKey(produto)] = value;
+    this.saveLearnedNames(learnedNames);
+  }
+
+  // Nomes (e unidades) que o app já conhece; a IA usa para devolver exatamente esses ingredientes
+  getKnownIngredients() {
+    const known = new Map();
+    const add = (name, unit) => {
+      const cleanName = String(name || '').trim();
+      if (!cleanName) return;
+      const key = `${this.normalizeText(cleanName)}|${unit || 'un'}`;
+      if (!known.has(key)) known.set(key, { name: cleanName, unit: unit || 'un' });
+    };
+
+    (window.inventory || []).forEach((item) => add(item.name, item.unit));
+    (window.recipes || []).forEach((recipe) => {
+      (recipe?.ingredients || []).forEach((ingredient) => {
+        // Receitas aceitam alternativas: "penne || parafuso"
+        String(ingredient?.name || '').split('||').forEach((name) => add(name, ingredient.unit));
+      });
+    });
+
+    return Array.from(known.values()).slice(0, 500);
+  }
+
+  // Salva tudo direto na despensa; a pessoa só mexe se algum nome estiver errado
+  importProducts(produtos) {
+    const learnedNames = this.loadLearnedNames();
+    this.importedItems = [];
+    this.ignoredItems = [];
+
+    produtos.forEach((raw) => {
+      const produto = this.applyLearnedName(raw, learnedNames);
+      if (produto.food === false) {
+        this.ignoredItems.push(produto);
+        return;
+      }
+      this.importedItems.push(this.addImportedItem(produto));
+    });
+
+    this.persistImport();
+    setAlert(`${this.importedItems.length} item(ns) da nota salvos na despensa!`, 'success');
+  }
+
+  addImportedItem(produto) {
+    const item = { name: produto.name, brand: '', qty: produto.qty, unit: produto.unit, category: produto.category };
+    const existed = Boolean(this.findExistingInventoryItem(this.buildNormalizedProduct(item)));
+    const added = this.addToInventory(item, { silent: true });
+
+    return { produto, existed, name: added.name, qty: added.qty, unit: added.unit, category: added.category };
+  }
+
+  // Desfaz só a quantidade que veio desta nota
+  undoImportedItem(entry) {
+    const item = this.findExistingInventoryItem({ name: entry.name, brand: '', unit: entry.unit });
+    if (!item) return;
+
+    item.qty = Math.round(((Number(item.qty) || 0) - entry.qty) * 1000) / 1000;
+    if (item.qty <= 0) {
+      if (entry.existed) {
+        item.qty = 0; // ingrediente já existia (ex: criado por uma receita): mantém com 0
+      } else {
+        window.inventory.splice(window.inventory.indexOf(item), 1);
+      }
+    }
+  }
+
+  renameImportedItem(index) {
+    const entry = this.importedItems[index];
+    if (!entry) return;
+
+    const original = entry.produto.original ? ` (na nota: ${entry.produto.original})` : '';
+    const newName = window.prompt(`Nome do ingrediente${original}`, entry.name)?.trim();
+    if (!newName || this.normalizeText(newName) === this.normalizeText(entry.name)) return;
+
+    this.undoImportedItem(entry);
+    this.importedItems[index] = this.addImportedItem({
+      ...entry.produto,
+      name: newName,
+      qty: entry.qty,
+      unit: entry.unit,
+      category: entry.category
+    });
+    this.rememberName(entry.produto, { name: newName, category: entry.category });
+    this.persistImport();
+  }
+
+  removeImportedItem(index) {
+    const entry = this.importedItems[index];
+    if (!entry) return;
+
+    this.undoImportedItem(entry);
+    this.importedItems.splice(index, 1);
+    this.persistImport();
+  }
+
+  // Item que a IA achou que não era comida, mas a pessoa quer salvar
+  addIgnoredItem(index) {
+    const [produto] = this.ignoredItems.splice(index, 1);
+    if (!produto) return;
+
+    this.importedItems.push(this.addImportedItem(produto));
+    this.rememberName(produto, { name: produto.name, category: produto.category });
+    this.persistImport();
+  }
+
+  persistImport() {
+    if (window.saveAll) window.saveAll();
+    if (window.renderList) window.renderList();
+    this.renderImportSummary();
+  }
+
+  renderImportSummary() {
+    const infoDiv = qs('#productInfo');
+    if (!infoDiv) return;
 
     // Esconde a câmera para sobrar espaço para a lista
     const video = qs('#scanner-video');
@@ -321,138 +410,41 @@ class BarcodeScanner {
     const instruction = qs('.scanner-instruction');
     if (instruction) instruction.style.display = 'none';
 
-    this.showScannerStatus(`${produtos.length} produto(s) encontrado(s). Confira os nomes antes de salvar: separe a marca do ingrediente (ex: "biscoito" e marca "oreo"). O app lembra suas correções nas próximas notas.`);
+    this.showScannerStatus(`✅ ${this.importedItems.length} item(ns) salvos na despensa. Algum nome errado? Toque nele para corrigir.`);
 
-    const infoDiv = qs('#productInfo');
-    if (!infoDiv) return;
-
-    const inputStyle = 'padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;';
-
-    const rows = produtos.map((p, index) => {
-      const unitOptions = REVIEW_UNITS
-        .map((unit) => `<option value="${unit}" ${unit === p.unit ? 'selected' : ''}>${unit}</option>`)
-        .join('');
-      const categoryOptions = REVIEW_CATEGORIES
-        .map(([value, label]) => `<option value="${value}" ${value === p.category ? 'selected' : ''}>${label}</option>`)
-        .join('');
-
-      return `
-        <div class="nota-item" data-index="${index}" style="padding: 12px 0; border-bottom: 1px solid #eee;">
-          <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #777; margin-bottom: 6px;">
-            <input type="checkbox" data-field="include" checked>
-            <span>Na nota: ${escapeHtml(p.original || p.name)}${p.learned ? ' · <span style="color: #2e7d32;">corrigido automaticamente</span>' : ''}</span>
-          </label>
-          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-            <input type="text" data-field="name" value="${escapeHtml(p.name)}" placeholder="Ingrediente" style="flex: 2; min-width: 140px; ${inputStyle}">
-            <input type="text" data-field="brand" value="${escapeHtml(p.brand)}" placeholder="Marca (opcional)" style="flex: 1; min-width: 100px; ${inputStyle}">
-          </div>
-          <div style="display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap;">
-            <input type="text" data-field="qty" inputmode="decimal" value="${escapeHtml(p.qty)}" style="width: 80px; ${inputStyle}">
-            <select data-field="unit" style="${inputStyle} background: white;">${unitOptions}</select>
-            <select data-field="category" style="flex: 1; min-width: 140px; ${inputStyle} background: white;">${categoryOptions}</select>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    infoDiv.innerHTML = `
-      <div style="margin-top: 8px;">${rows}</div>
-      <button id="saveNotaItems" class="btn" style="width: 100%; margin-top: 16px;">Salvar na despensa</button>
-      <button id="discardNota" class="btn-ghost" style="width: 100%; margin-top: 8px;">Descartar nota</button>
-    `;
-
-    qs('#saveNotaItems')?.addEventListener('click', () => this.saveReviewedProducts());
-    qs('#discardNota')?.addEventListener('click', () => closeModal());
-  }
-
-  saveReviewedProducts() {
-    const rows = Array.from(document.querySelectorAll('#productInfo .nota-item'));
-    const itens = [];
-    let hasInvalid = false;
-
-    // Primeiro valida tudo, para não salvar a nota pela metade
-    rows.forEach((row) => {
-      const field = (name) => row.querySelector(`[data-field="${name}"]`);
-      row.style.background = '';
-      if (!field('include')?.checked) return;
-
-      const name = field('name').value.trim();
-      const qty = parseFloat(field('qty').value.trim().replace(',', '.'));
-
-      if (!name || !(qty > 0)) {
-        hasInvalid = true;
-        row.style.background = '#ffebee';
-        return;
-      }
-
-      itens.push({
-        produto: this.reviewProdutos[Number(row.dataset.index)],
-        final: {
-          name,
-          brand: field('brand').value.trim(),
-          qty,
-          unit: field('unit').value,
-          category: field('category').value
-        }
-      });
-    });
-
-    if (hasInvalid) {
-      setAlert('Preencha o nome e a quantidade dos itens marcados em vermelho.', 'error');
-      return;
-    }
-
-    if (!itens.length) {
-      setAlert('Nenhum item selecionado para salvar.', 'error');
-      return;
-    }
-
-    const learnedNames = this.loadLearnedNames();
-    const adicionados = itens.map(({ produto, final }) => {
-      // Só lembra o que for diferente da sugestão automática
-      const suggestion = produto?.suggestion || {};
-      const changed =
-        this.normalizeText(final.name) !== this.normalizeText(suggestion.name) ||
-        this.normalizeText(final.brand) !== this.normalizeText(suggestion.brand) ||
-        final.category !== suggestion.category;
-
-      if (produto) {
-        const key = this.notaKey(produto);
-        if (changed) {
-          learnedNames[key] = { name: final.name, brand: final.brand, category: final.category };
-        } else {
-          delete learnedNames[key];
-        }
-      }
-
-      return this.addToInventory(final, { silent: true });
-    }).filter(Boolean);
-
-    this.saveLearnedNames(learnedNames);
-    if (window.saveAll) window.saveAll();
-    if (window.renderList) window.renderList();
-
-    this.showScannerStatus(`${adicionados.length} produto(s) adicionado(s) à despensa.`);
-    this.showImportSummary(adicionados);
-    setAlert('Produtos da nota adicionados à despensa!', 'success');
-  }
-
-  showImportSummary(produtos) {
-    const infoDiv = qs('#productInfo');
-    if (!infoDiv) return;
-
-    const items = produtos.map((p) => `
-      <li style="padding: 6px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; gap: 8px;">
-        <span style="text-transform: capitalize;">${escapeHtml(p.name)}</span>
-        <span style="white-space: nowrap; color: #555;">${escapeHtml(p.qty)} ${escapeHtml(p.unit)}</span>
+    const rows = this.importedItems.map((entry, index) => `
+      <li style="display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #eee;">
+        <button data-rename="${index}" style="flex: 1; text-align: left; background: none; border: none; padding: 0; font-size: 15px; color: inherit; cursor: pointer; text-transform: capitalize;">${escapeHtml(entry.name)}</button>
+        <span style="white-space: nowrap; color: #555; font-size: 14px;">${escapeHtml(entry.qty)} ${escapeHtml(entry.unit)}</span>
+        <button data-remove="${index}" aria-label="Remover" style="background: none; border: none; color: #999; font-size: 18px; cursor: pointer; padding: 0 4px;">✕</button>
       </li>
     `).join('');
 
+    const ignored = this.ignoredItems.length
+      ? `<div style="margin-top: 12px; font-size: 13px; color: #777;">
+           Não salvos (não são comida). Toque para salvar mesmo assim:
+           ${this.ignoredItems.map((p, index) => `<button data-add-ignored="${index}" style="background: none; border: 1px solid #ddd; border-radius: 12px; padding: 2px 8px; margin: 4px 2px 0 0; font-size: 12px; color: #555; cursor: pointer;">+ ${escapeHtml(p.name)}</button>`).join('')}
+         </div>`
+      : '';
+
     infoDiv.innerHTML = `
-      <ul style="list-style: none; padding: 0; margin: 16px 0 0; max-height: 280px; overflow-y: auto;">${items}</ul>
-      <button id="scanAnotherNota" class="btn" style="width: 100%; margin-top: 12px;">Ler outra nota</button>
+      <ul style="list-style: none; padding: 0; margin: 12px 0 0;">${rows}</ul>
+      ${ignored}
+      <button id="finishNota" class="btn" style="width: 100%; margin-top: 16px;">Pronto</button>
+      <button id="scanAnotherNota" class="btn-ghost" style="width: 100%; margin-top: 8px;">Ler outra nota</button>
     `;
-    qs('#scanAnotherNota')?.addEventListener('click', () => this.openScanner());
+
+    // onclick (e não addEventListener) para não acumular listeners a cada atualização da lista
+    infoDiv.onclick = (event) => {
+      const button = event.target.closest('button');
+      if (!button) return;
+
+      if (button.dataset.rename !== undefined) this.renameImportedItem(Number(button.dataset.rename));
+      else if (button.dataset.remove !== undefined) this.removeImportedItem(Number(button.dataset.remove));
+      else if (button.dataset.addIgnored !== undefined) this.addIgnoredItem(Number(button.dataset.addIgnored));
+      else if (button.id === 'finishNota') closeModal();
+      else if (button.id === 'scanAnotherNota') this.openScanner();
+    };
   }
 
   showRetryButton() {
