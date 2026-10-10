@@ -36,6 +36,34 @@ function escapeHtml(value) {
   }[char]));
 }
 
+// Correções de nomes que a pessoa fez na revisão da nota ("BISC OREO" -> biscoito / oreo).
+// Fica só neste aparelho e guarda apenas os itens que foram corrigidos.
+const LEARNED_NAMES_KEY = 'cc_nota_nomes_pwa';
+
+const REVIEW_UNITS = ['g', 'kg', 'ml', 'l', 'un'];
+
+const REVIEW_CATEGORIES = [
+  ['hortifruti', 'Hortifrúti'],
+  ['carnes', 'Carnes, Aves, Ovo e Peixes'],
+  ['laticinios', 'Laticínios e Frios'],
+  ['graos', 'Grãos e Cereais'],
+  ['padaria', 'Padaria e Matinais'],
+  ['bebidas', 'Bebidas'],
+  ['enlatados', 'Enlatados e Conservas'],
+  ['oleaginosas', 'Oleaginosas e Sementes'],
+  ['temperos', 'Temperos e especiarias'],
+  ['oleos', 'Óleos e Gorduras'],
+  ['acucares', 'Açúcares e Ingredientes de Forno'],
+  ['molhos', 'Molhos, Condimentos e Vinagres'],
+  ['lanches', 'Lanches e Petiscos'],
+  ['outros', 'Outros']
+];
+
+function learnedNamesStorageKey() {
+  const code = String(window.activeGroupCode || 'default').trim().toUpperCase();
+  return `${LEARNED_NAMES_KEY}_${code}`;
+}
+
 class BarcodeScanner {
   constructor() {
     this.onBarcodeScanned = null;
@@ -233,16 +261,9 @@ class BarcodeScanner {
         throw new Error('Nenhum produto foi retornado pela nota fiscal.');
       }
 
-      const adicionados = produtos
-        .map((produto) => this.addToInventory(produto, { silent: true }))
-        .filter(Boolean);
-
-      if (window.saveAll) window.saveAll();
-      if (window.renderList) window.renderList();
-
-      this.showScannerStatus(`${adicionados.length} produto(s) adicionado(s) à despensa.`);
-      this.showImportSummary(adicionados);
-      setAlert('Todos os produtos da nota foram adicionados à despensa!', 'success');
+      // Antes de salvar, mostra os itens para a pessoa conferir e corrigir os nomes
+      const learnedNames = this.loadLearnedNames();
+      this.showReviewScreen(produtos.map((produto) => this.applyLearnedName(produto, learnedNames)));
     } catch (error) {
       const mensagem = error?.message || 'Erro ao processar a nota fiscal.';
       this.showScannerStatus(mensagem);
@@ -251,6 +272,169 @@ class BarcodeScanner {
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  loadLearnedNames() {
+    try {
+      return JSON.parse(localStorage.getItem(learnedNamesStorageKey())) || {};
+    } catch {
+      return {};
+    }
+  }
+
+  saveLearnedNames(learnedNames) {
+    try {
+      localStorage.setItem(learnedNamesStorageKey(), JSON.stringify(learnedNames));
+    } catch (error) {
+      console.warn('⚠️ Não foi possível salvar as correções de nomes:', error);
+    }
+  }
+
+  // Chave do item na nota (sem tamanho da embalagem), para reconhecer o mesmo produto nas próximas notas
+  notaKey(produto) {
+    return this.normalizeText(produto.key || produto.original || produto.name);
+  }
+
+  applyLearnedName(produto, learnedNames) {
+    const suggestion = {
+      name: produto.name || '',
+      brand: produto.brand || '',
+      category: produto.category || 'outros'
+    };
+    const learned = learnedNames[this.notaKey(produto)];
+
+    return {
+      ...produto,
+      ...suggestion,
+      ...(learned ? { name: learned.name, brand: learned.brand || '', category: learned.category || suggestion.category } : {}),
+      learned: Boolean(learned),
+      suggestion
+    };
+  }
+
+  showReviewScreen(produtos) {
+    this.reviewProdutos = produtos;
+
+    // Esconde a câmera para sobrar espaço para a lista
+    const video = qs('#scanner-video');
+    if (video?.parentElement) video.parentElement.style.display = 'none';
+    const instruction = qs('.scanner-instruction');
+    if (instruction) instruction.style.display = 'none';
+
+    this.showScannerStatus(`${produtos.length} produto(s) encontrado(s). Confira os nomes antes de salvar: separe a marca do ingrediente (ex: "biscoito" e marca "oreo"). O app lembra suas correções nas próximas notas.`);
+
+    const infoDiv = qs('#productInfo');
+    if (!infoDiv) return;
+
+    const inputStyle = 'padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;';
+
+    const rows = produtos.map((p, index) => {
+      const unitOptions = REVIEW_UNITS
+        .map((unit) => `<option value="${unit}" ${unit === p.unit ? 'selected' : ''}>${unit}</option>`)
+        .join('');
+      const categoryOptions = REVIEW_CATEGORIES
+        .map(([value, label]) => `<option value="${value}" ${value === p.category ? 'selected' : ''}>${label}</option>`)
+        .join('');
+
+      return `
+        <div class="nota-item" data-index="${index}" style="padding: 12px 0; border-bottom: 1px solid #eee;">
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #777; margin-bottom: 6px;">
+            <input type="checkbox" data-field="include" checked>
+            <span>Na nota: ${escapeHtml(p.original || p.name)}${p.learned ? ' · <span style="color: #2e7d32;">corrigido automaticamente</span>' : ''}</span>
+          </label>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <input type="text" data-field="name" value="${escapeHtml(p.name)}" placeholder="Ingrediente" style="flex: 2; min-width: 140px; ${inputStyle}">
+            <input type="text" data-field="brand" value="${escapeHtml(p.brand)}" placeholder="Marca (opcional)" style="flex: 1; min-width: 100px; ${inputStyle}">
+          </div>
+          <div style="display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap;">
+            <input type="text" data-field="qty" inputmode="decimal" value="${escapeHtml(p.qty)}" style="width: 80px; ${inputStyle}">
+            <select data-field="unit" style="${inputStyle} background: white;">${unitOptions}</select>
+            <select data-field="category" style="flex: 1; min-width: 140px; ${inputStyle} background: white;">${categoryOptions}</select>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    infoDiv.innerHTML = `
+      <div style="margin-top: 8px;">${rows}</div>
+      <button id="saveNotaItems" class="btn" style="width: 100%; margin-top: 16px;">Salvar na despensa</button>
+      <button id="discardNota" class="btn-ghost" style="width: 100%; margin-top: 8px;">Descartar nota</button>
+    `;
+
+    qs('#saveNotaItems')?.addEventListener('click', () => this.saveReviewedProducts());
+    qs('#discardNota')?.addEventListener('click', () => closeModal());
+  }
+
+  saveReviewedProducts() {
+    const rows = Array.from(document.querySelectorAll('#productInfo .nota-item'));
+    const itens = [];
+    let hasInvalid = false;
+
+    // Primeiro valida tudo, para não salvar a nota pela metade
+    rows.forEach((row) => {
+      const field = (name) => row.querySelector(`[data-field="${name}"]`);
+      row.style.background = '';
+      if (!field('include')?.checked) return;
+
+      const name = field('name').value.trim();
+      const qty = parseFloat(field('qty').value.trim().replace(',', '.'));
+
+      if (!name || !(qty > 0)) {
+        hasInvalid = true;
+        row.style.background = '#ffebee';
+        return;
+      }
+
+      itens.push({
+        produto: this.reviewProdutos[Number(row.dataset.index)],
+        final: {
+          name,
+          brand: field('brand').value.trim(),
+          qty,
+          unit: field('unit').value,
+          category: field('category').value
+        }
+      });
+    });
+
+    if (hasInvalid) {
+      setAlert('Preencha o nome e a quantidade dos itens marcados em vermelho.', 'error');
+      return;
+    }
+
+    if (!itens.length) {
+      setAlert('Nenhum item selecionado para salvar.', 'error');
+      return;
+    }
+
+    const learnedNames = this.loadLearnedNames();
+    const adicionados = itens.map(({ produto, final }) => {
+      // Só lembra o que for diferente da sugestão automática
+      const suggestion = produto?.suggestion || {};
+      const changed =
+        this.normalizeText(final.name) !== this.normalizeText(suggestion.name) ||
+        this.normalizeText(final.brand) !== this.normalizeText(suggestion.brand) ||
+        final.category !== suggestion.category;
+
+      if (produto) {
+        const key = this.notaKey(produto);
+        if (changed) {
+          learnedNames[key] = { name: final.name, brand: final.brand, category: final.category };
+        } else {
+          delete learnedNames[key];
+        }
+      }
+
+      return this.addToInventory(final, { silent: true });
+    }).filter(Boolean);
+
+    this.saveLearnedNames(learnedNames);
+    if (window.saveAll) window.saveAll();
+    if (window.renderList) window.renderList();
+
+    this.showScannerStatus(`${adicionados.length} produto(s) adicionado(s) à despensa.`);
+    this.showImportSummary(adicionados);
+    setAlert('Produtos da nota adicionados à despensa!', 'success');
   }
 
   showImportSummary(produtos) {

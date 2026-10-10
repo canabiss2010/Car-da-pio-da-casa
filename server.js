@@ -95,6 +95,58 @@ function extractPackageSize(name) {
     return null;
 }
 
+// Abreviações comuns nas notas fiscais (chave sem acento, minúscula).
+// Só entram abreviações sem ambiguidade; o resto o usuário corrige na tela de revisão do app.
+const ABBREVIATIONS = {
+    // padaria, lanches e doces
+    bisc: 'biscoito', biscoit: 'biscoito', bolach: 'bolacha', choc: 'chocolate', chocol: 'chocolate',
+    achoc: 'achocolatado', bisn: 'bisnaguinha', recheado: 'recheado', rech: 'recheado', wafe: 'wafer',
+    salg: 'salgadinho', pip: 'pipoca', amend: 'amendoim', cast: 'castanha',
+    // laticínios e frios
+    lte: 'leite', leit: 'leite', cond: 'condensado', qjo: 'queijo', qj: 'queijo', queij: 'queijo',
+    muss: 'mussarela', mussar: 'mussarela', mucar: 'mussarela', mussa: 'mussarela', pres: 'presunto', presu: 'presunto',
+    req: 'requeijão', requeij: 'requeijão', iog: 'iogurte', iogur: 'iogurte', mant: 'manteiga', mantei: 'manteiga',
+    marg: 'margarina', cr: 'creme', desn: 'desnatado', semidesn: 'semidesnatado', semid: 'semidesnatado',
+    integ: 'integral', parm: 'parmesão', mort: 'mortadela', ralad: 'ralado', fatiad: 'fatiado', fat: 'fatiado',
+    // carnes
+    ling: 'linguiça', lingui: 'linguiça', linguic: 'linguiça', calab: 'calabresa', calabr: 'calabresa',
+    fgo: 'frango', frgo: 'frango', frang: 'frango', bov: 'bovina', sui: 'suína', suin: 'suína',
+    peit: 'peito', cox: 'coxa', sobrecox: 'sobrecoxa', hamb: 'hambúrguer', salsich: 'salsicha',
+    cong: 'congelado', congel: 'congelado', resf: 'resfriado', moid: 'moído', bife: 'bife',
+    // mercearia
+    feij: 'feijão', feijao: 'feijão', carioc: 'carioca', arr: 'arroz', macarr: 'macarrão', mac: 'macarrão',
+    espag: 'espaguete', far: 'farinha', farin: 'farinha', trig: 'trigo', mand: 'mandioca', fub: 'fubá',
+    acuc: 'açúcar', acucar: 'açúcar', refin: 'refinado', crist: 'cristal', torr: 'torrado', soluv: 'solúvel',
+    temp: 'tempero', extr: 'extrato', ext: 'extrato', mol: 'molho', tom: 'tomate', maion: 'maionese',
+    vin: 'vinagre', azeit: 'azeite', sard: 'sardinha', palm: 'palmito', azeiton: 'azeitona', milh: 'milho',
+    ervil: 'ervilha', gelat: 'gelatina', ferm: 'fermento', trad: 'tradicional', nat: 'natural',
+    // bebidas
+    refrig: 'refrigerante', refri: 'refrigerante', refr: 'refrigerante', cerv: 'cerveja', ag: 'água',
+    agua: 'água', min: 'mineral', gaseif: 'gaseificada', energ: 'energético',
+    // hortifruti
+    bat: 'batata', cebol: 'cebola', cenour: 'cenoura', banan: 'banana', mor: 'morango', laranj: 'laranja',
+    // limpeza e higiene
+    deterg: 'detergente', amac: 'amaciante', desinf: 'desinfetante', sabon: 'sabonete', pap: 'papel',
+    hig: 'higiênico', dent: 'dental'
+};
+
+// "BISC OREO" -> "biscoito oreo", "S/GLUTEN" -> "sem gluten"
+function expandAbbreviations(name) {
+    return cleanText(name)
+        .split(' ')
+        .map((word) => {
+            const prefix = word.match(/^([cs])\/(.*)$/i);
+            if (prefix) {
+                const rest = prefix[2] ? ` ${expandAbbreviations(prefix[2])}` : '';
+                return (prefix[1].toLowerCase() === 'c' ? 'com' : 'sem') + rest;
+            }
+
+            const key = stripAccents(word).replace(/\.+$/, '');
+            return ABBREVIATIONS[key] || word.toLowerCase();
+        })
+        .join(' ');
+}
+
 // Ordem importa: o primeiro padrão que bater define a categoria
 const CATEGORY_RULES = [
     ['acucares', /\b(leite cond|lte cond|leite em po|farinha de trigo|farinha trigo|far trigo|fermento|amido|maisena|cacau|chocolate em po|choc po|gelatina|acucar|acuc|adocante|mel\b|essencia|coco ralado)/],
@@ -140,13 +192,19 @@ function toAppFormat({ name, qty, unit }) {
     }
 
     // "PAO FRANCES KG" -> "PAO FRANCES"
-    cleanName = cleanName.replace(/\s+(kg|un|und)$/i, '');
+    cleanName = cleanName.replace(/\s+(kg|un|und)$/i, '') || cleanText(name);
+
+    const expandedName = expandAbbreviations(cleanName);
+    const category = guessCategory(expandedName);
 
     return {
-        name: cleanName || cleanText(name),
+        name: expandedName,
         qty: round(quantity),
         unit: finalUnit,
-        category: guessCategory(cleanName)
+        category: category !== 'outros' ? category : guessCategory(cleanName),
+        // Nome como veio na nota: o app usa para mostrar e para lembrar as correções do usuário
+        original: cleanText(name),
+        key: stripAccents(cleanName)
     };
 }
 
