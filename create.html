@@ -7,7 +7,6 @@
     <title>Criar Cardápio</title>
     <link rel="stylesheet" href="css/styles.css">
     <meta name="theme-color" content="#1F6F3B" />
-    <script type="module" src="firebase-config.js"></script>
     <style>
         body {
             display: flex;
@@ -155,6 +154,75 @@
             box-shadow: 0 12px 24px rgba(31, 111, 59, 0.18);
         }
 
+        .form-hint {
+            display: block;
+            margin-top: 6px;
+            font-size: 12px;
+            color: #6b776a;
+            line-height: 1.5;
+        }
+
+        .create-card button.google-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 14px;
+            margin-bottom: 4px;
+            background: white;
+            border: 1px solid #dde2dd;
+            border-radius: 14px;
+            color: #2c3b2f;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .google-g {
+            font-weight: 800;
+            font-size: 18px;
+            color: #4285F4;
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 14px 0 16px;
+            font-size: 12px;
+            color: #8a9589;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e3e7e2;
+        }
+
+        .create-card button.link-btn {
+            display: block;
+            width: 100%;
+            margin-top: 10px;
+            padding: 12px;
+            background: none;
+            border: 1px solid #dde2dd;
+            border-radius: 14px;
+            color: #1F6F3B;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .create-card .form-footer p {
+            color: #5c6a5a;
+            font-size: 13px;
+        }
+
         @media (max-width: 480px) {
             body {
                 padding: 16px 12px 20px;
@@ -187,9 +255,9 @@
             <p>Crie seu cardápio compartilhado</p>
         </div>
 
-        <div class="create-card">
+        <div class="create-card" id="createCard">
             <h2>Começar</h2>
-            <p>Dê um nome ao cardápio e seu nome pessoal</p>
+            <p>Dê um nome ao cardápio e crie seu acesso. Com e-mail e senha você nunca perde o cardápio, mesmo trocando de celular.</p>
 
             <form id="createForm">
                 <div class="form-group">
@@ -200,15 +268,64 @@
 
                 <div class="form-group">
                     <label for="creatorName">Seu Nome</label>
-                    <input id="creatorName" type="text" placeholder="Digite seu nome" required autocomplete="off">
+                    <input id="creatorName" type="text" placeholder="Digite seu nome" required autocomplete="name">
                 </div>
+
+                <div id="accountFields">
+                    <button type="button" class="google-btn" id="createGoogleBtn">
+                        <span class="google-g">G</span> Criar com Google
+                    </button>
+                    <div class="divider">ou cadastre e-mail e senha</div>
+
+                    <div class="form-group">
+                        <label for="creatorEmail">Seu E-mail</label>
+                        <input id="creatorEmail" type="email" placeholder="voce@email.com" autocomplete="email">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="creatorPassword">Crie uma Senha</label>
+                        <input id="creatorPassword" type="password" placeholder="Pelo menos 6 caracteres"
+                            minlength="6" autocomplete="new-password">
+                        <small class="form-hint">Só você usa esta senha. Para a família entrar, você manda um link pelo WhatsApp.</small>
+                    </div>
+                </div>
+                <p id="accountInfo" class="form-hint" hidden></p>
 
                 <button type="submit">✨ Criar Cardápio</button>
             </form>
 
             <div class="form-footer">
-                <p style="margin: 0 0 12px 0;">Após criar, você compartilhará com sua família</p>
-                <a href="join.html">👥 Já tenho um cardápio</a>
+                <button type="button" class="link-btn" id="showLoginBtn">🔑 Já criei um cardápio</button>
+                <p style="margin: 14px 0 0 0;">Recebeu um convite? É só clicar no link do WhatsApp.</p>
+            </div>
+        </div>
+
+        <div class="create-card" id="loginCard" hidden>
+            <h2>Entrar</h2>
+            <p>Use o e-mail e a senha que você cadastrou ao criar o cardápio.</p>
+
+            <button type="button" class="google-btn" id="loginGoogleBtn">
+                <span class="google-g">G</span> Entrar com Google
+            </button>
+            <div class="divider">ou use e-mail e senha</div>
+
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="loginEmail">E-mail</label>
+                    <input id="loginEmail" type="email" placeholder="voce@email.com" required autocomplete="email">
+                </div>
+
+                <div class="form-group">
+                    <label for="loginPassword">Senha</label>
+                    <input id="loginPassword" type="password" required autocomplete="current-password">
+                </div>
+
+                <button type="submit">🔑 Entrar</button>
+            </form>
+
+            <div class="form-footer">
+                <button type="button" class="link-btn" id="forgotPasswordBtn">Esqueci minha senha</button>
+                <button type="button" class="link-btn" id="showCreateBtn">✨ Criar um cardápio novo</button>
             </div>
         </div>
     </div>

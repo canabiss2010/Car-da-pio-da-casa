@@ -1,0 +1,125 @@
+rules_version = '2';
+
+// Regras de segurança do Cardápio da Casa.
+// Copie tudo isto em: Firebase Console > Firestore Database > Regras > Publicar.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasEmail() {
+      return signedIn() && 'email' in request.auth.token;
+    }
+
+    match /grupos/{groupId} {
+      function memberUids(data) {
+        return data.get('memberUids', []);
+      }
+
+      function isMember() {
+        return signedIn() && request.auth.uid in memberUids(resource.data);
+      }
+
+      function isOwner() {
+        return signedIn() && resource.data.get('ownerUid', null) == request.auth.uid;
+      }
+
+      function changed() {
+        return request.resource.data.diff(resource.data).affectedKeys();
+      }
+
+      // Em mapas por pessoa (nomes, convites usados), só a própria entrada pode mudar
+      function onlyOwnEntryChanged(field) {
+        return request.resource.data.get(field, {}).diff(resource.data.get(field, {}))
+          .affectedKeys().hasOnly([request.auth.uid]);
+      }
+
+      // A pessoa só se adiciona na lista, sem mexer em mais nada
+      function addsOnlySelf() {
+        let before = memberUids(resource.data);
+        let after = memberUids(request.resource.data);
+        return changed().hasOnly(['memberUids', 'memberNames', 'memberInvites'])
+          && after.hasAll(before)
+          && after.removeAll(before).hasOnly([request.auth.uid])
+          && onlyOwnEntryChanged('memberNames')
+          && onlyOwnEntryChanged('memberInvites');
+      }
+
+      // Convite deste grupo, dentro das 24h e criado depois da última remoção de membro
+      function hasValidInvite() {
+        let invite = get(/databases/$(database)/documents/convites/$(request.resource.data.memberInvites[request.auth.uid])).data;
+        return invite.groupId == groupId
+          && invite.expiresAt > request.time
+          && invite.createdAt > resource.data.get('invitesValidAfter', timestamp.value(0));
+      }
+
+      // Grupos antigos (sem dono) aceitam o código de 4 letras só até 15/11/2026,
+      // para quem já usa o app ter tempo de abrir a versão nova
+      function isLegacyGroup() {
+        return !('ownerUid' in resource.data) && request.time < timestamp.date(2026, 11, 15);
+      }
+
+      // Membros salvam dispensa, receitas, cardápio e lista; não mexem em quem participa
+      function isMemberDataUpdate() {
+        return isMember()
+          && !changed().hasAny(['ownerUid', 'memberUids', 'memberInvites', 'invitesValidAfter', 'accessKey', 'createdAt'])
+          && onlyOwnEntryChanged('memberNames');
+      }
+
+      // Criadora de grupo antigo cadastra e-mail e vira dona
+      function isClaimingLegacyGroup() {
+        return isMember() && hasEmail()
+          && !('ownerUid' in resource.data)
+          && request.resource.data.ownerUid == request.auth.uid
+          && changed().hasOnly(['ownerUid', 'creatorName', 'memberNames'])
+          && onlyOwnEntryChanged('memberNames');
+      }
+
+      // Dona pode remover pessoas, mas não pode sair nem passar o grupo adiante
+      function isOwnerUpdate() {
+        return isOwner()
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.auth.uid in memberUids(request.resource.data);
+      }
+
+      allow get: if isMember();
+      allow list: if signedIn() && resource.data.ownerUid == request.auth.uid;
+
+      allow create: if hasEmail()
+        && groupId.size() >= 8
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.memberUids == [request.auth.uid]
+        && request.resource.data.memberNames.keys().hasOnly([request.auth.uid]);
+
+      allow update: if isOwnerUpdate()
+        || isMemberDataUpdate()
+        || isClaimingLegacyGroup()
+        || (signedIn() && addsOnlySelf() && (isLegacyGroup() || hasValidInvite()));
+
+      allow delete: if false;
+    }
+
+    match /convites/{inviteId} {
+      // Quem tem o link consegue ver o convite; ninguém consegue listar todos
+      allow get: if signedIn();
+      allow list: if false;
+
+      // Só membros criam convites, e eles valem no máximo 24h
+      allow create: if signedIn()
+        && inviteId.size() >= 20
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(25, 'h')
+        && request.auth.uid in get(/databases/$(database)/documents/grupos/$(request.resource.data.groupId)).data.get('memberUids', []);
+
+      allow update, delete: if false;
+    }
+
+    // Qualquer outra coleção fica fechada
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

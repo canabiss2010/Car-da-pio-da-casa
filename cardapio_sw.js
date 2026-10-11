@@ -1,7 +1,7 @@
 // cardapio_sw.js - versão para GitHub Pages (caminhos relativos)
 // Atualize CACHE_NAME quando fizer mudanças para forçar atualização
 // increment this version whenever you deploy changes to force SW update
-const CACHE_NAME = 'cardapio-cache-v8';
+const CACHE_NAME = 'cardapio-cache-v10';
 
 const URLS_TO_CACHE = [
   './',
@@ -15,6 +15,7 @@ const URLS_TO_CACHE = [
   'js/app.js',
   'js/create.js',
   'js/join.js',
+  'js/modules/groups.js',
   // optionally cache modules to ensure latest code
   'js/modules/inventory.js',
   'js/modules/recipes.js',

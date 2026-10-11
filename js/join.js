@@ -1,44 +1,6 @@
 import { STORAGE_KEYS } from './config.js';
 import { qs, validateJSON } from './modules/utils.js';
-import { db } from '../firebase-config.js';
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js";
-
-function normalize(text) {
-    return String(text || '').trim().toLowerCase();
-}
-
-function getGroupMetaStore() {
-    return validateJSON(localStorage.getItem(STORAGE_KEYS.GROUP_META)) || {};
-}
-
-function getGroupMeta(groupId) {
-    const store = getGroupMetaStore();
-    return store[String(groupId || '').trim().toUpperCase()] || null;
-}
-
-/**
- * Busca o grupo no Firestore pelo código de acesso
- */
-async function fetchGroupFromFirestore(accessKey) {
-    try {
-        const groupRef = doc(db, 'grupos', String(accessKey).trim().toUpperCase());
-        const docSnap = await getDoc(groupRef);
-
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            return {
-                accessKey: data.accessKey,
-                menuName: data.menuName,
-                creatorName: data.creatorName,
-                createdAt: data.createdAt
-            };
-        }
-        return null;
-    } catch (error) {
-        console.error('Erro ao buscar grupo no Firestore:', error);
-        return null;
-    }
-}
+import { getInvite, acceptInvite, authErrorMessage } from './modules/groups.js';
 
 function setNotice(text, isError = true) {
     const notice = qs('#joinNotice');
@@ -50,90 +12,85 @@ function setNotice(text, isError = true) {
     notice.classList.add('visible');
 }
 
+function setMessage(text) {
+    const joinMessage = qs('#joinMessage');
+    if (joinMessage) joinMessage.textContent = text;
+}
+
+function saveProfile(name, groupId, menuName) {
+    const store = validateJSON(localStorage.getItem(STORAGE_KEYS.GROUP_META)) || {};
+    store[groupId] = {
+        menuName,
+        creatorName: store[groupId]?.creatorName || '',
+        createdAt: store[groupId]?.createdAt || new Date().toISOString()
+    };
+    localStorage.setItem(STORAGE_KEYS.GROUP_META, JSON.stringify(store));
+    localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify({
+        name,
+        groupId,
+        menuName,
+        isHost: false
+    }));
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
-    const form = qs('#joinExistingForm');
-    if (!form) return;
+    const form = qs('#joinForm');
+    const inviteId = new URLSearchParams(window.location.search).get('convite');
 
-    const urlParams = new URLSearchParams(window.location.search);
-    // Verifica se veio via parâmetro 'codigo' (link de compartilhamento) ou 'group' (compatibilidade)
-    const codigoParam = urlParams.get('codigo');
-    const groupIdParam = urlParams.get('group');
-    const accessKeyParam = codigoParam || groupIdParam;
-
-    let inviteGroupId = null;
-    let inviteGroupMeta = null;
-
-    if (accessKeyParam) {
-        const normalizedAccessKey = String(accessKeyParam).trim().toUpperCase();
-
-        const groupCodeInput = qs('#groupCode');
-        if (groupCodeInput) {
-            groupCodeInput.value = normalizedAccessKey;
-        }
-
-        // Primeiro tenta buscar localmente
-        let meta = getGroupMeta(normalizedAccessKey);
-
-        // Se não encontrar localmente, tenta buscar no Firestore
-        if (!meta) {
-            try {
-                meta = await fetchGroupFromFirestore(normalizedAccessKey);
-                if (meta) {
-                    const store = getGroupMetaStore();
-                    store[normalizedAccessKey] = {
-                        menuName: meta.menuName || '',
-                        creatorName: meta.creatorName || '',
-                        createdAt: meta.createdAt || new Date().toISOString()
-                    };
-                    localStorage.setItem(STORAGE_KEYS.GROUP_META, JSON.stringify(store));
-                }
-            } catch (error) {
-                console.error('Erro ao verificar acesso:', error);
-            }
-        }
-
-        if (meta) {
-            inviteGroupId = normalizedAccessKey;
-            inviteGroupMeta = meta;
-            const joinMessage = qs('#joinMessage');
-            if (joinMessage) {
-                joinMessage.textContent = `Você foi convidado para participar do cardápio "${meta.menuName}". Digite seu nome para entrar.`;
-            }
-        } else {
-            setNotice('Link de convite inválido. Digite o código do grupo correto ou crie um novo cardápio.', true);
-        }
+    // Só se entra num grupo pelo link de convite (os códigos antigos de 4 letras não valem mais)
+    if (!inviteId) {
+        setMessage('Para entrar no cardápio da sua família, peça para alguém do grupo mandar o link de convite pelo WhatsApp.');
+        return;
     }
+
+    let invite = null;
+    try {
+        invite = await getInvite(inviteId);
+    } catch (error) {
+        console.error('Erro ao buscar convite:', error);
+        setMessage('Não foi possível abrir o convite.');
+        setNotice(authErrorMessage(error));
+        return;
+    }
+
+    if (!invite) {
+        setMessage('Este link de convite não é válido.');
+        setNotice('Peça um link novo para alguém da família.');
+        return;
+    }
+
+    if (invite.expired) {
+        setMessage(`O convite para o cardápio "${invite.menuName}" expirou.`);
+        setNotice('Os links valem por 24 horas. Peça um link novo para alguém da família.');
+        return;
+    }
+
+    setMessage(`Você foi convidado para o cardápio "${invite.menuName}". Digite seu nome para entrar.`);
+    form.hidden = false;
+    qs('#joinUserName').focus();
 
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
-        const groupCode = qs('#groupCode') ? qs('#groupCode').value.trim().toUpperCase() : '';
-        const userName = qs('#existingUserName').value.trim();
-
-        if (!groupCode) {
-            setNotice('Preencha a chave do grupo.', true);
-            return;
-        }
-
+        const userName = qs('#joinUserName').value.trim();
         if (!userName) {
-            setNotice('Preencha o seu nome.', true);
+            setNotice('Preencha o seu nome.');
             return;
         }
 
-        const groupData = await fetchGroupFromFirestore(groupCode);
-        if (!groupData) {
-            setNotice('Código de grupo inválido ou inexistente. Verifique e tente novamente.', true);
+        const button = form.querySelector('button[type="submit"]');
+        button.disabled = true;
+        try {
+            await acceptInvite(inviteId, invite.groupId, userName);
+        } catch (error) {
+            console.error('Erro ao entrar no grupo:', error);
+            setNotice(error.code === 'permission-denied'
+                ? 'Este convite não vale mais. Peça um link novo para alguém da família.'
+                : authErrorMessage(error));
+            button.disabled = false;
             return;
         }
 
-        const store = getGroupMetaStore();
-        store[groupCode] = {
-            menuName: groupData.menuName || '',
-            creatorName: groupData.creatorName || '',
-            createdAt: groupData.createdAt || new Date().toISOString()
-        };
-        localStorage.setItem(STORAGE_KEYS.GROUP_META, JSON.stringify(store));
-
-        const target = `cardapio_casa_pwa.html?group=${encodeURIComponent(groupCode)}&user=${encodeURIComponent(userName)}`;
-        window.location.href = target;
+        saveProfile(userName, invite.groupId, invite.menuName);
+        window.location.replace('cardapio_casa_pwa.html');
     });
 });

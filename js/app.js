@@ -7,8 +7,12 @@ import { qs, validateJSON } from './modules/utils.js';
 console.log('📦 Utils importado');
 import { barcodeScanner } from './modules/barcode.js';
 console.log('📦 Barcode importado');
-import { db } from '../firebase-config.js';
-import { doc, getDoc, setDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js";
+import { db, auth } from '../firebase-config.js';
+import {
+  joinGroup, createInvite, removeMember, claimLegacyGroup, claimLegacyGroupWithGoogle,
+  logout, authErrorMessage, INVITE_HOURS
+} from './modules/groups.js';
+import { doc, getDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js";
 console.log('📦 Firestore importado');
 
 function persistProfileFromUrl() {
@@ -95,8 +99,10 @@ function groupExists(groupId) {
 
 window.isSyncing = false;
 let currentGroupUnsubscribe = null;
+let currentGroupWatch = null;
 
 function unsubscribeRealtime() {
+  currentGroupWatch = null;
   if (typeof currentGroupUnsubscribe === 'function') {
     currentGroupUnsubscribe();
     currentGroupUnsubscribe = null;
@@ -123,10 +129,127 @@ function updateSidebarDetails(profile) {
   if (menuNameEl) {
     menuNameEl.textContent = profile.menuName ? `Cardápio: ${profile.menuName}` : 'Cardápio: —';
   }
-  const groupCodeEl = qs('#sidebarGroupCode');
-  if (groupCodeEl) {
-    groupCodeEl.textContent = profile.groupId ? `Código da Casa: ${profile.groupId}` : 'Código da Casa: —';
+}
+
+function renderMembers(groupId, cloudData) {
+  const list = qs('#membersList');
+  if (!list) return;
+
+  const myUid = auth.currentUser?.uid;
+  const ownerUid = cloudData.ownerUid || null;
+  const iAmOwner = !!myUid && myUid === ownerUid;
+  let members = Object.entries(cloudData.memberNames || {}).map(([uid, name]) => ({ uid, name }));
+
+  // Grupos antigos guardavam só os nomes
+  if (!members.length && Array.isArray(cloudData.members)) {
+    members = cloudData.members.map(name => ({ uid: null, name }));
   }
+
+  members.sort((a, b) => (b.uid === ownerUid) - (a.uid === ownerUid) || String(a.name).localeCompare(String(b.name)));
+
+  list.innerHTML = '';
+  if (!members.length) {
+    list.innerHTML = '<li class="members-empty">Ninguém por aqui ainda.</li>';
+    return;
+  }
+
+  members.forEach(({ uid, name }) => {
+    const li = document.createElement('li');
+    const label = document.createElement('span');
+    label.textContent = `${uid && uid === ownerUid ? '👑 ' : ''}${name || 'Sem nome'}${uid && uid === myUid ? ' (você)' : ''}`;
+    li.appendChild(label);
+
+    if (iAmOwner && uid && uid !== myUid) {
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'member-remove';
+      removeBtn.textContent = 'Remover';
+      removeBtn.addEventListener('click', () => handleRemoveMember(groupId, uid, name));
+      li.appendChild(removeBtn);
+    }
+    list.appendChild(li);
+  });
+}
+
+async function handleRemoveMember(groupId, uid, name) {
+  const ok = window.confirm(`Remover ${name || 'esta pessoa'} do cardápio?\n\nOs links de convite já enviados vão parar de funcionar. Se precisar, é só mandar um novo.`);
+  if (!ok) return;
+  try {
+    await removeMember(groupId, uid);
+    cachedInvite = null;
+    UI.setAlert(`${name || 'A pessoa'} foi removida do cardápio.`, 'success', 4000);
+  } catch (error) {
+    console.error('Erro ao remover membro:', error);
+    UI.setAlert(`Não foi possível remover. ${authErrorMessage(error)}`, 'error', 6000);
+  }
+}
+
+// Criadora de grupo antigo: pede (no máximo uma vez por semana) para cadastrar e-mail e senha
+const CLAIM_DISMISS_KEY = 'cc_claim_dismissed_until';
+let claimPromptShown = false;
+
+function maybeAskLegacyClaim(groupId, cloudData) {
+  if (claimPromptShown || cloudData.ownerUid || !window.user?.isHost || auth.currentUser?.email) return;
+  try {
+    if (Number(localStorage.getItem(CLAIM_DISMISS_KEY) || 0) > Date.now()) return;
+    localStorage.setItem(CLAIM_DISMISS_KEY, String(Date.now() + 7 * 24 * 60 * 60 * 1000));
+  } catch (error) {
+    // sem localStorage: mostra mesmo assim
+  }
+  claimPromptShown = true;
+
+  UI.openModal('🔒 Proteja seu cardápio', `
+    <p>Agora quem cria o cardápio tem e-mail e senha. Assim você nunca perde o acesso, mesmo trocando de celular, e pode remover pessoas do grupo.</p>
+    <button type="button" id="claimGoogle" class="btn" style="width:100%;margin:4px 0 12px">Continuar com Google</button>
+    <p class="small" style="text-align:center;margin:0 0 12px">ou cadastre e-mail e senha</p>
+    <form id="claimForm">
+      <label for="claimEmail">Seu e-mail</label>
+      <input id="claimEmail" type="email" required autocomplete="email" style="width:100%;margin:4px 0 12px">
+      <label for="claimPassword">Crie uma senha (pelo menos 6 caracteres)</label>
+      <input id="claimPassword" type="password" minlength="6" required autocomplete="new-password" style="width:100%;margin:4px 0 16px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="submit" class="btn">Salvar</button>
+        <button type="button" id="claimLater" class="btn-ghost">Agora não</button>
+      </div>
+    </form>
+  `);
+
+  qs('#claimLater')?.addEventListener('click', UI.closeModal);
+  qs('#claimGoogle')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      await claimLegacyGroupWithGoogle(groupId, window.user?.name);
+      UI.closeModal();
+      UI.setAlert('✅ Pronto! Agora você entra com sua conta Google.', 'success', 5000);
+    } catch (error) {
+      console.error('Erro ao cadastrar com Google:', error);
+      if (!['auth/popup-closed-by-user', 'auth/cancelled-popup-request'].includes(error.code)) {
+        UI.setAlert(authErrorMessage(error), 'error', 6000);
+      }
+      button.disabled = false;
+    }
+  });
+  qs('#claimForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const button = event.target.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+      await claimLegacyGroup(groupId, qs('#claimEmail').value, qs('#claimPassword').value, window.user?.name);
+      UI.closeModal();
+      UI.setAlert('✅ Pronto! Agora você entra com seu e-mail e senha.', 'success', 5000);
+    } catch (error) {
+      console.error('Erro ao cadastrar e-mail:', error);
+      UI.setAlert(authErrorMessage(error), 'error', 6000);
+      button.disabled = false;
+    }
+  });
+}
+
+function showLostAccess() {
+  const list = qs('#membersList');
+  if (list) list.innerHTML = '<li class="members-empty">Você não faz mais parte deste grupo.</li>';
+  UI.setAlert('Você não faz mais parte deste cardápio. Para voltar, peça um link novo a alguém da família.', 'error', 0);
 }
 
 function openMenu() {
@@ -138,6 +261,7 @@ function openMenu() {
     backdrop.classList.add('active');
     backdrop.setAttribute('aria-hidden', 'false');
   }
+  prepareInvite().catch(error => console.warn('Convite não preparado:', error));
 }
 
 function closeMenu() {
@@ -167,13 +291,29 @@ function watchGroupRealtime(groupId) {
     return;
   }
 
+  const watchToken = {};
+  currentGroupWatch = watchToken;
+  joinGroup(groupId, window.user?.name)
+    .catch((error) => {
+      console.warn('⚠️ Não foi possível registrar este aparelho no grupo:', error);
+      if (error.code === 'permission-denied') return 'denied';
+    })
+    .then((result) => {
+  if (currentGroupWatch !== watchToken) return;
+  if (result === 'denied') {
+    showLostAccess();
+    return;
+  }
   const groupRef = doc(db, 'grupos', groupId);
   currentGroupUnsubscribe = onSnapshot(groupRef, (snapshot) => {
-    if (window.isSyncing) {
+    if (!snapshot.exists()) {
       return;
     }
 
-    if (!snapshot.exists()) {
+    renderMembers(groupId, snapshot.data() || {});
+    maybeAskLegacyClaim(groupId, snapshot.data() || {});
+
+    if (window.isSyncing) {
       return;
     }
 
@@ -218,7 +358,9 @@ function watchGroupRealtime(groupId) {
     }
   }, (error) => {
     console.error('Erro no listener em tempo real:', error);
+    if (error.code === 'permission-denied') showLostAccess();
   });
+    });
 }
 
 function menuNameExists(menuName) {
@@ -258,6 +400,7 @@ async function syncCloudGroupData() {
   }
 
   try {
+    await joinGroup(groupId, window.user?.name);
     const groupRef = doc(db, 'grupos', groupId);
     await updateDoc(groupRef, {
       dispensa: window.inventory || [],
@@ -267,24 +410,13 @@ async function syncCloudGroupData() {
     });
     console.log('✅ Firestore sincronizado para grupo', groupId);
   } catch (error) {
-    console.warn('⚠️ updateDoc falhou, tentando setDoc com merge:', error);
-    try {
-      const groupRef = doc(db, 'grupos', groupId);
-      await setDoc(groupRef, {
-        dispensa: window.inventory || [],
-        receitas: window.recipes || [],
-        cardapio: window.plan || [],
-        shoppingList: window.shoppingList || []
-      }, { merge: true });
-      console.log('✅ Firestore criado/mesclado com setDoc merge para grupo', groupId);
-    } catch (fallbackError) {
-      console.error('❌ Falha no fallback de Firestore:', fallbackError);
-    }
+    console.error('❌ Falha ao sincronizar com o Firestore:', error);
   }
 }
 
 async function fetchCloudGroupData(groupId) {
   try {
+    await joinGroup(groupId, window.user?.name);
     const groupRef = doc(db, 'grupos', groupId);
     const snapshot = await getDoc(groupRef);
 
@@ -584,56 +716,78 @@ function showAppScreen(profile) {
   watchGroupRealtime(profile.groupId);
 }
 
-function handleShare() {
+// Link de convite com validade de 24h. É preparado ao abrir o menu, para o
+// WhatsApp abrir na hora do toque (alguns celulares bloqueiam janelas abertas com atraso).
+let cachedInvite = null;
+let invitePromise = null;
+
+function freshInvite() {
+  const groupId = window.user?.groupId;
+  if (cachedInvite && cachedInvite.groupId === groupId && cachedInvite.expiresAt - Date.now() > 60 * 60 * 1000) {
+    return cachedInvite;
+  }
+  return null;
+}
+
+function prepareInvite() {
+  const groupId = window.user?.groupId;
+  if (!groupId) return Promise.resolve(null);
+  if (freshInvite()) return Promise.resolve(cachedInvite);
+  if (!invitePromise) {
+    invitePromise = createInvite(groupId, window.user.menuName || '')
+      .then(({ inviteId, expiresAt }) => {
+        const link = new URL(`join.html?convite=${inviteId}`, window.location.href).href;
+        cachedInvite = { groupId, expiresAt, link };
+        return cachedInvite;
+      })
+      .finally(() => { invitePromise = null; });
+  }
+  return invitePromise;
+}
+
+async function handleShare() {
   if (!window.user || !window.user.groupId) {
     UI.setAlert('Erro: perfil não encontrado.', 'error', 4000);
     return;
   }
 
-  const accessKey = window.user.groupId;
-  const menuName = window.user.menuName || 'Cardápio';
-  const baseUrl = window.location.origin + window.location.pathname.replace('cardapio_casa_pwa.html', 'join.html');
-  const shareLink = `${baseUrl}?codigo=${accessKey}`;
+  let invite = freshInvite();
+  if (!invite) {
+    UI.showLoading();
+    try {
+      invite = await prepareInvite();
+    } catch (error) {
+      console.error('Erro ao criar convite:', error);
+      UI.setAlert(`Não foi possível criar o convite. ${authErrorMessage(error)}`, 'error', 6000);
+      return;
+    } finally {
+      UI.hideLoading();
+    }
+  }
 
-  const message = `🍽️ Convite para o Cardápio "${menuName}"\n\nOlá! Você foi convidado para compartilhar o planejamento de cardápio.\n\nCódigo de acesso: ${accessKey}\nOu clique aqui: ${shareLink}`;
+  const menuName = window.user.menuName || 'Cardápio';
+  const message = `🍽️ Convite para o Cardápio "${menuName}"\n\nOlá! Você foi convidado para planejar o cardápio junto.\n\nToque no link para entrar (vale por ${INVITE_HOURS} horas):\n${invite.link}`;
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
 
-  console.log('📱 Compartilhando via WhatsApp:');
-  console.log('Cardápio:', menuName);
-  console.log('Chave de acesso:', accessKey);
-  console.log('Link:', shareLink);
+  const opened = window.open(whatsappUrl, '_blank');
+  if (opened) return;
 
-  // Tenta abrir no WhatsApp
-  window.open(whatsappUrl, '_blank');
-
-  // Fallback: se o WhatsApp não abrir, oferece outras opções
-  setTimeout(() => {
-    const supported = navigator.share !== undefined;
-
-    if (supported && Notification.permission === 'granted') {
-      UI.setAlert('📱 WhatsApp aberto! Compartilhe o convite com sua família.', 'success', 3000);
-    } else if (supported) {
-      navigator.share({
-        title: 'Mamão com Açúcar',
-        text: message,
-        url: shareLink
-      }).catch(() => {
-        navigator.clipboard.writeText(shareLink).then(() => {
-          UI.setAlert('✅ Link copiado! Cole no WhatsApp para convidar sua família.', 'success', 3000);
-        });
-      });
-    } else {
-      navigator.clipboard.writeText(shareLink).then(() => {
-        UI.setAlert('✅ Link copiado! Cole no WhatsApp para convidar sua família.', 'success', 3000);
-      }).catch(() => {
-        UI.setAlert(`Compartilhe este link: ${shareLink}`, 'info', 10000);
-      });
-    }
-  }, 500);
+  // Se o celular bloqueou a janela, oferece compartilhar ou copiar
+  if (navigator.share) {
+    navigator.share({ title: 'Mamão com Açúcar', text: message }).catch(() => {});
+    return;
+  }
+  navigator.clipboard.writeText(message).then(() => {
+    UI.setAlert('✅ Convite copiado! Cole no WhatsApp para convidar sua família.', 'success', 4000);
+  }).catch(() => {
+    UI.setAlert(`Compartilhe este link: ${invite.link}`, 'info', 10000);
+  });
 }
 
-function handleLogout() {
+async function handleLogout() {
   unsubscribeRealtime();
+  cachedInvite = null;
+  await logout().catch(error => console.warn('Erro ao sair do Firebase:', error));
   localStorage.removeItem(STORAGE_KEYS.USER_PROFILE);
   window.user = null;
   window.activeGroupCode = null;
