@@ -544,6 +544,8 @@ Devolva:
   - "alternativas": lista de outros ingredientes que a receita aceita no lugar (ex: "penne ou parafuso" -> nome "penne", alternativas ["parafuso"]). Senão [].
   - "qtd" e "unidade": unidade só pode ser g, ml ou un. Converta medidas caseiras com estimativa razoável:
     1 xícara de líquido = 240 ml; 1 xícara de farinha = 120 g; 1 xícara de açúcar = 180 g; 1 xícara de arroz = 185 g;
+    1 xícara de chocolate em pó, cacau ou achocolatado = 90 g; 1 xícara de manteiga = 200 g; 1 xícara de aveia = 80 g;
+    1 xícara de fubá = 120 g; 1 xícara de queijo ralado = 90 g; 1 xícara de coco ralado = 80 g;
     1 colher de sopa = 15 ml (líquido) ou cerca de 10 a 15 g (sólido); 1 colher de chá = 5 ml ou cerca de 4 g;
     1 lata de leite condensado = 395 g; 1 caixinha de creme de leite = 200 g; 1 dente de alho = 1 un; ovos, cebolas, tomates = un.
     Se a quantidade não estiver escrita, ou for "a gosto"/"quanto baste", use qtd null e unidade null.
