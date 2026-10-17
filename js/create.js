@@ -8,7 +8,7 @@ import {
 /**
  * Mostra um alerta simples (fallback se UI não estiver disponível)
  */
-function showAlert(message, type = 'info') {
+function showAlert(message, type = 'info', duration = null) {
     const alertDiv = document.createElement('div');
     alertDiv.style.cssText = `
         position: fixed;
@@ -42,7 +42,7 @@ function showAlert(message, type = 'info') {
     alertDiv.textContent = message;
     document.body.appendChild(alertDiv);
 
-    setTimeout(() => alertDiv.remove(), type === 'error' ? 5000 : 3000);
+    setTimeout(() => alertDiv.remove(), duration || (type === 'error' ? 5000 : 3000));
 }
 
 function normalize(text) {
@@ -133,6 +133,20 @@ async function handleCreateSubmit(event) {
     }
 }
 
+// O e-mail desta conta Google já foi cadastrado com senha (não com o botão do Google)
+function isEmailWithPassword(error) {
+    return ['auth/email-already-in-use', 'auth/account-exists-with-different-credential'].includes(error && error.code);
+}
+
+// Leva para "Já criei um cardápio" com o e-mail preenchido, faltando só a senha
+function askPasswordLogin(error) {
+    showCard('login');
+    const email = error && error.customData && error.customData.email;
+    if (email) qs('#loginEmail').value = email;
+    showAlert('Esse e-mail foi cadastrado com senha, não com o Google. Digite a sua senha para entrar (ou toque em "Esqueci minha senha").', 'info', 9000);
+    (email ? qs('#loginPassword') : qs('#loginEmail')).focus();
+}
+
 // Ignora quando a pessoa só fechou a janela do Google
 function isPopupCancel(error) {
     return ['auth/popup-closed-by-user', 'auth/cancelled-popup-request'].includes(error && error.code);
@@ -164,7 +178,8 @@ async function handleCreateWithGoogle(event) {
         saveProfileAndOpenApp(creatorName, groupId, menuName);
     } catch (error) {
         console.error('❌ Erro ao criar com Google:', error);
-        if (!isPopupCancel(error)) showAlert(authErrorMessage(error), 'error');
+        if (isEmailWithPassword(error)) askPasswordLogin(error);
+        else if (!isPopupCancel(error)) showAlert(authErrorMessage(error), 'error');
         button.disabled = false;
     }
 }
@@ -185,7 +200,8 @@ async function handleLoginWithGoogle(event) {
         saveProfileAndOpenApp(group.name, group.groupId, group.menuName);
     } catch (error) {
         console.error('❌ Erro ao entrar com Google:', error);
-        if (!isPopupCancel(error)) showAlert(authErrorMessage(error), 'error');
+        if (isEmailWithPassword(error)) askPasswordLogin(error);
+        else if (!isPopupCancel(error)) showAlert(authErrorMessage(error), 'error');
         button.disabled = false;
     }
 }
