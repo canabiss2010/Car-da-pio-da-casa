@@ -8,7 +8,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json());
+// Fotos de receita chegam em base64 (até 3 fotos já reduzidas pelo app)
+app.use(express.json({ limit: '10mb' }));
 
 function cleanText(value) {
     if (typeof value !== 'string') return '';
@@ -354,12 +355,16 @@ const AI_CATEGORIES = [
 // O primeiro é o padrão; os outros são tentados se o modelo não existir mais (Google aposenta modelos antigos)
 const AI_MODELS = [process.env.GEMINI_MODEL, 'gemini-3.1-flash-lite', 'gemini-2.5-flash-lite'].filter(Boolean);
 
-function buildAIPrompt(produtos, knownIngredients) {
-    const known = (Array.isArray(knownIngredients) ? knownIngredients : [])
+function formatKnownIngredients(knownIngredients) {
+    return (Array.isArray(knownIngredients) ? knownIngredients : [])
         .filter((item) => item && typeof item.name === 'string' && item.name.trim())
         .slice(0, 500)
         .map((item) => `- ${cleanText(item.name).slice(0, 60)} (${cleanText(String(item.unit || 'un')).slice(0, 5)})`)
         .join('\n');
+}
+
+function buildAIPrompt(produtos, knownIngredients) {
+    const known = formatKnownIngredients(knownIngredients);
 
     const itens = produtos
         .map((p, i) => `${i}. "${p.original}" | qtd: ${p.qty} ${p.unit}`)
@@ -388,20 +393,25 @@ Responda só com JSON neste formato, um objeto por item, na mesma ordem:
 {"itens":[{"i":0,"nome":"...","qtd":0,"unidade":"g","categoria":"...","comida":true}]}`;
 }
 
-async function callGemini(prompt) {
+// images: [{ data: base64, mimeType }] (opcional, para ler fotos)
+async function callGemini(prompt, images = [], timeout = 25000) {
     let lastError = null;
+    const parts = [
+        { text: prompt },
+        ...images.map((image) => ({ inlineData: { mimeType: image.mimeType, data: image.data } }))
+    ];
 
     for (const model of AI_MODELS) {
         try {
             const response = await axios.post(
                 `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
                 {
-                    contents: [{ parts: [{ text: prompt }] }],
+                    contents: [{ parts }],
                     generationConfig: { responseMimeType: 'application/json', temperature: 0.1 }
                 },
                 {
                     headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY },
-                    timeout: 25000
+                    timeout
                 }
             );
 
@@ -494,6 +504,131 @@ app.post('/raspar-nota', async (req, res) => {
         return res.status(502).json({
             sucesso: false,
             erro: mensagem
+        });
+    }
+});
+
+// ---------- Receita por foto ou texto ----------
+
+const RECIPE_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const RECIPE_MACROS = ['proteina', 'carbo', 'vegetais', 'gordura'];
+const MAX_RECIPE_IMAGES = 3;
+const MAX_IMAGE_BASE64 = 4 * 1024 * 1024;
+const MAX_RECIPE_TEXT = 8000;
+
+function buildRecipePrompt(knownIngredients, texto) {
+    const fonte = texto
+        ? `O texto abaixo foi colado ou ditado (falado) por uma pessoa. Pode ter conversa, repetições e coisas que não fazem parte da receita: ignore tudo que não for nome, rendimento ou ingrediente.
+
+TEXTO:
+"""
+${texto}
+"""`
+        : 'A(s) foto(s) mostram uma receita (livro, caderno escrito à mão, print). Se forem várias, são partes da mesma receita.';
+
+    return `Você cadastra receitas num app brasileiro de cardápio da família.
+${fonte}
+
+Extraia SOMENTE o que está na receita. NUNCA invente ingrediente, quantidade ou rendimento que não esteja escrito.
+
+Devolva:
+- "receita": false se não houver uma receita (ex: foto de outra coisa, texto sem ingredientes). Senão true.
+- "nome": nome da receita, ou null se não aparecer.
+- "porcoes": número de porções/pessoas que rende, ou null se não estiver escrito.
+- "ingredientes": um por ingrediente, com:
+  - "nome": o ingrediente, genérico, em português, minúsculo, sem marca (ex: "farinha de trigo", "ovo", "leite").
+    Se for o mesmo ingrediente de algum da lista "INGREDIENTES QUE O APP JÁ CONHECE", use EXATAMENTE aquele nome e aquela unidade.
+  - "alternativas": lista de outros ingredientes que a receita aceita no lugar (ex: "penne ou parafuso" -> nome "penne", alternativas ["parafuso"]). Senão [].
+  - "qtd" e "unidade": unidade só pode ser g, ml ou un. Converta medidas caseiras com estimativa razoável:
+    1 xícara de líquido = 240 ml; 1 xícara de farinha = 120 g; 1 xícara de açúcar = 180 g; 1 xícara de arroz = 185 g;
+    1 colher de sopa = 15 ml (líquido) ou cerca de 10 a 15 g (sólido); 1 colher de chá = 5 ml ou cerca de 4 g;
+    1 lata de leite condensado = 395 g; 1 caixinha de creme de leite = 200 g; 1 dente de alho = 1 un; ovos, cebolas, tomates = un.
+    Se a quantidade não estiver escrita, ou for "a gosto"/"quanto baste", use qtd null e unidade null.
+  - "original": o trecho do ingrediente exatamente como está escrito (ex: "2 xícaras de farinha de trigo").
+- "macros": quais destes grupos a receita tem em quantidade relevante: ${RECIPE_MACROS.join(', ')} (carbo = arroz, massa, pão, batata, farinha...).
+- "observacao": se algo estiver ilegível, cortado na foto ou faltando, explique em uma frase curta para a pessoa. Senão null.
+
+INGREDIENTES QUE O APP JÁ CONHECE (nome e unidade):
+${formatKnownIngredients(knownIngredients) || '(nenhum)'}
+
+Responda só com JSON neste formato:
+{"receita":true,"nome":"...","porcoes":4,"ingredientes":[{"nome":"...","alternativas":[],"qtd":200,"unidade":"g","original":"..."}],"macros":["carbo"],"observacao":null}`;
+}
+
+function sanitizeRecipe(result) {
+    const toText = (value, max) => cleanText(typeof value === 'string' ? value : '').slice(0, max);
+    const servings = Math.round(Number(result?.porcoes));
+
+    const ingredientes = (Array.isArray(result?.ingredientes) ? result.ingredientes : [])
+        .slice(0, 60)
+        .map((item) => {
+            const unit = String(item?.unidade || '').toLowerCase();
+            const qty = Number(item?.qtd);
+            const hasQty = ['g', 'ml', 'un', 'kg', 'l'].includes(unit) && Number.isFinite(qty) && qty > 0;
+
+            return {
+                nome: toText(item?.nome, 60).toLowerCase(),
+                alternativas: (Array.isArray(item?.alternativas) ? item.alternativas : [])
+                    .map((alt) => toText(alt, 60).toLowerCase())
+                    .filter(Boolean)
+                    .slice(0, 3),
+                qtd: hasQty ? round(qty) : null,
+                unidade: hasQty ? unit : null,
+                original: toText(item?.original, 120)
+            };
+        })
+        .filter((item) => item.nome);
+
+    return {
+        receita: result?.receita !== false,
+        nome: toText(result?.nome, 80) || null,
+        porcoes: Number.isFinite(servings) && servings > 0 && servings <= 100 ? servings : null,
+        ingredientes,
+        macros: (Array.isArray(result?.macros) ? result.macros : []).filter((m) => RECIPE_MACROS.includes(m)),
+        observacao: toText(result?.observacao, 300) || null
+    };
+}
+
+app.post('/ler-receita', async (req, res) => {
+    try {
+        if (!process.env.GEMINI_API_KEY) {
+            return res.status(503).json({ sucesso: false, erro: 'A leitura de receitas não está disponível no momento.' });
+        }
+
+        const { imagens, texto, knownIngredients } = req.body || {};
+        const images = (Array.isArray(imagens) ? imagens : [])
+            .slice(0, MAX_RECIPE_IMAGES)
+            .filter((img) => img && RECIPE_IMAGE_TYPES.includes(img.mimeType) &&
+                typeof img.data === 'string' && img.data.length > 0 && img.data.length <= MAX_IMAGE_BASE64)
+            .map((img) => ({ mimeType: img.mimeType, data: img.data }));
+        const text = typeof texto === 'string' ? texto.trim().slice(0, MAX_RECIPE_TEXT) : '';
+
+        if (!images.length && !text) {
+            return res.status(400).json({ sucesso: false, erro: 'Envie uma foto ou o texto da receita.' });
+        }
+
+        const result = await callGemini(buildRecipePrompt(knownIngredients, images.length ? '' : text), images, 60000);
+        const receita = sanitizeRecipe(result);
+
+        if (!receita.receita || !receita.ingredientes.length) {
+            return res.status(422).json({
+                sucesso: false,
+                erro: images.length
+                    ? 'Não consegui encontrar os ingredientes nessa foto. Tente uma foto mais de perto, com boa luz e sem cortar a lista.'
+                    : 'Não encontrei ingredientes nesse texto. Diga ou escreva cada ingrediente com a quantidade.'
+            });
+        }
+
+        return res.json({ sucesso: true, receita });
+    } catch (error) {
+        console.error('Erro ao ler receita:', error?.response?.status || '', error?.message);
+        const status = error?.response?.status;
+
+        return res.status(502).json({
+            sucesso: false,
+            erro: status === 429
+                ? 'Muitas leituras seguidas. Espere um minuto e tente de novo.'
+                : 'Não foi possível ler a receita agora. Tente de novo em instantes.'
         });
     }
 });

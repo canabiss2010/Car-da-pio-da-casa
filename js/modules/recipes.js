@@ -1,7 +1,12 @@
 // js/modules/recipes.js
-import { qs, getIngredientName } from './utils.js';
-import { openModal, closeModal, setAlert, clearAlerts } from './ui.js';
-import { normalizeUnit, isValidUnit, getValidUnits } from './unitNormalizer.js';
+import { qs } from './utils.js';
+import { openModal, setAlert } from './ui.js';
+import { normalizeUnit } from './unitNormalizer.js';
+import { barcodeScanner } from './barcode.js';
+
+const RECIPE_API_URL = 'https://car-da-pio-da-casa.onrender.com/ler-receita';
+const RECIPE_TIMEOUT_MS = 120000; // o servidor gratuito do Render pode levar ~1 min para acordar
+const MAX_PHOTOS = 3;
 
 const frequencyLevels = [
   { level: 1, percentage: 10, label: 'Muito Raro' },
@@ -12,21 +17,45 @@ const frequencyLevels = [
 ];
 
 const MACRO_TAGS = [
-  { key: 'carbo', label: '🌾 Carboidratos' },
-  { key: 'proteina', label: '🥩 Proteínas' },
+  { key: 'proteina', label: '🥩 Proteína' },
+  { key: 'carbo', label: '🌾 Carboidrato' },
   { key: 'vegetais', label: '🥦 Vegetais' },
-  { key: 'gordura', label: '🥑 Gorduras' }
+  { key: 'gordura', label: '🥑 Gordura' }
 ];
 
-let currentEditIndex = -1;
+// Grupos da lista de receitas (o campo "category" da receita)
+const CATEGORY_GROUPS = [
+  { key: 'proteina', label: '🥩 Proteínas' },
+  { key: 'carboidrato', label: '🌾 Carboidratos' },
+  { key: 'vegetais', label: '🥦 Vegetais' },
+  { key: 'outros', label: '🍽️ Outros' }
+];
+
+const UNITS = ['g', 'kg', 'ml', 'l', 'un'];
+
+// Receita aberta no formulário (null = nova receita)
+let editingRecipe = null;
 let selectedMacros = new Set();
+let selectedFrequency = 3;
+// Receitas na ordem em que aparecem na lista (os botões apontam para cá)
+let renderedRecipes = [];
+let searchTerm = '';
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 function normalizeIngredientText(value) {
   return String(value ?? '')
     .trim()
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .replace(/\s+/g, ' ');
 }
 
@@ -46,12 +75,23 @@ function splitIngredientAlternatives(value = '') {
   };
 }
 
-function formatIngredientForTextarea(ingredient = {}) {
+function formatIngredientName(ingredient = {}) {
   const parts = [ingredient.name || ''];
   if (Array.isArray(ingredient.alternatives) && ingredient.alternatives.length > 0) {
     parts.push(...ingredient.alternatives);
   }
   return parts.filter(Boolean).join(' || ');
+}
+
+function formatQty(qty) {
+  const value = Number(qty);
+  if (!Number.isFinite(value)) return '';
+  return String(Math.round(value * 1000) / 1000).replace('.', ',');
+}
+
+function parseQty(value) {
+  const parsed = parseFloat(String(value ?? '').trim().replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function ensureInventoryItemsForRecipe(ingredients = []) {
@@ -85,13 +125,8 @@ function ensureInventoryItemsForRecipe(ingredients = []) {
   return created;
 }
 
-function getMacroShare() {
-  const count = selectedMacros.size;
-  return count === 0 ? 0 : Number((100 / count).toFixed(2));
-}
-
 function getMacroValues() {
-  const share = getMacroShare();
+  const share = selectedMacros.size === 0 ? 0 : Number((100 / selectedMacros.size).toFixed(2));
   return {
     carbo: selectedMacros.has('carbo') ? share : 0,
     proteina: selectedMacros.has('proteina') ? share : 0,
@@ -100,663 +135,693 @@ function getMacroValues() {
   };
 }
 
-function normalizeMacroSelection(input = {}) {
+// Receitas antigas podem ter só "category" ou só "macros"
+function getRecipeMacroSelection(recipe = {}) {
   const next = new Set();
+  const macros = recipe.macros;
 
-  if (input && typeof input === 'object') {
-    if (input.carbo || input.carboidrato) next.add('carbo');
-    if (input.proteina) next.add('proteina');
-    if (input.vegetais) next.add('vegetais');
-    if (input.gordura || input.outros) next.add('gordura');
+  if (macros && typeof macros === 'object') {
+    if (macros.carbo || macros.carboidrato) next.add('carbo');
+    if (macros.proteina) next.add('proteina');
+    if (macros.vegetais) next.add('vegetais');
+    if (macros.gordura || macros.outros) next.add('gordura');
+  }
+
+  if (next.size === 0) {
+    if (recipe.category === 'proteina') next.add('proteina');
+    if (recipe.category === 'carboidrato') next.add('carbo');
+    if (recipe.category === 'vegetais' || recipe.category === 'verdura') next.add('vegetais');
   }
 
   return next;
 }
 
-function setMacroTagButtonState() {
-  const buttons = document.querySelectorAll('[data-macro-tag]');
-  buttons.forEach(button => {
-    const key = button.dataset.macroTag;
-    const isActive = selectedMacros.has(key);
-
-    button.style.background = isActive ? '#4f46e5' : '#f3f4f6';
-    button.style.color = isActive ? '#ffffff' : '#111827';
-    button.style.border = `1px solid ${isActive ? '#4f46e5' : '#d1d5db'}`;
-    button.style.borderRadius = '999px';
-    button.style.padding = '6px 12px';
-    button.style.fontSize = '0.92rem';
-    button.style.fontWeight = '700';
-    button.style.cursor = 'pointer';
-  });
+// O grupo da lista sai do que foi marcado (antes era um campo separado e repetido)
+function getCategoryFromMacros() {
+  if (selectedMacros.has('proteina')) return 'proteina';
+  if (selectedMacros.has('carbo')) return 'carboidrato';
+  if (selectedMacros.has('vegetais')) return 'vegetais';
+  return 'outros';
 }
 
-function toggleMacroTag(key) {
-  if (selectedMacros.has(key)) {
-    selectedMacros.delete(key);
-  } else {
-    selectedMacros.add(key);
-  }
-
-  setMacroTagButtonState();
+function getCategoryGroup(category) {
+  const key = category === 'verdura' ? 'vegetais' : category;
+  return CATEGORY_GROUPS.some(group => group.key === key) ? key : 'outros';
 }
 
-function resetMacroSelection() {
-  selectedMacros = new Set();
-  setMacroTagButtonState();
-}
+// Encontra a receita em window.recipes mesmo se a nuvem trocou o objeto
+function findRecipeIndex(recipe) {
+  if (!recipe) return -1;
+  const direct = window.recipes.indexOf(recipe);
+  if (direct >= 0) return direct;
 
-export function showRecipes() {
-  const html = `
-    <div style="margin-bottom: 16px">
-      <div style="display:flex;gap:8px;margin-bottom:8px">
-        <input id="m_recName" placeholder="Nome da receita" style="flex:1" />
-      </div>
-      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
-        <select id="m_recFrequency" style="flex:1;min-width:120px">
-          <option value="" selected disabled>Frequência</option>
-          <option value="1">Muito Raro</option>
-          <option value="2">Raro</option>
-          <option value="3">Moderado</option>
-          <option value="4">Frequente</option>
-          <option value="5">Muito Frequente</option>
-        </select>
-        <select id="m_recCategory" style="min-width:140px">
-          <option value="" disabled>Categorias</option>
-          <option value="proteina">Proteínas</option>
-          <option value="carboidrato">Carboidratos</option>
-          <option value="vegetais">Vegetais</option>
-          <option value="outros">Outros</option>
-        </select>
-        <div style="display:flex;align-items:center;gap:4px;margin:0 8px">
-          <span>Porções:</span>
-          <input id="m_recServings" type="number" min="1" value="4" style="width:50px;text-align:center" />
-        </div>  
-      </div>
-      <label>Ingredientes (um por linha: nome,quantidade,unidade)</label>
-      <div class="autocomplete-wrapper" style="position:relative;width:100%;">
-        <textarea id="m_recIngredients" rows="6" placeholder="arroz,2,xic\nfeijao,1,kg" style="width:100%;"></textarea>
-        <!-- box de sugestões de ingrediente, posicionada dentro da caixa -->
-        <ul id="ingredientSuggestions" class="suggestions"></ul>
-      </div>
-      <div style="margin-top:12px">
-        <div style="margin-bottom:8px">
-          <strong>Classificar macros</strong>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          ${MACRO_TAGS.map(tag => `
-            <button type="button" data-macro-tag="${tag.key}" style="background:#f3f4f6;color:#111827;border:1px solid #d1d5db;border-radius:999px;padding:6px 12px;font-size:0.92rem;font-weight:700;cursor:pointer">
-              ${tag.label}
-            </button>
-          `).join('')}
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:12px">
-        <button id="m_addRec" class="btn">Salvar Receita</button>
-        <button id="m_clearRec" class="btn-ghost">Limpar</button>
-      </div>
-    </div>
-    <div id="m_recList" class="list"></div>
-  `;
-  selectedMacros = new Set();
-  openModal('Receitas', html);
-  setMacroTagButtonState();
-  renderRecipeList();
-  setupIngredientAutocomplete();
-}
-
-function renderRecipeList() {
-  const el = qs('#m_recList');
-  if (!el) return;
-
-  el.innerHTML = '';
-
-  if (window.recipes.length === 0) {
-    el.innerHTML = '<div class="small">Nenhuma receita cadastrada</div>';
-    return;
-  }
-
-  // Agrupa receitas por categoria
-  const recipesByCategory = window.recipes.reduce((acc, recipe) => {
-    const category = recipe.category || 'outros';
-    if (!acc[category]) {
-      acc[category] = [];
-    }
-    acc[category].push(recipe);
-    return acc;
-  }, {});
-
-  // Ordem desejada das categorias
-  const categoryOrder = ['proteina', 'carboidrato', 'vegetais', 'outros'];
-
-  // Renderiza cada categoria
-  categoryOrder.forEach(category => {
-    if (!recipesByCategory[category]) return;
-
-    const categoryName = {
-      'proteina': 'Proteínas',
-      'carboidrato': 'Carboidratos',
-      'verdura': 'Verduras e Legumes',
-      'outros': 'Outros'
-    }[category] || 'Outros';
-
-    const categoryEl = document.createElement('div');
-    categoryEl.className = 'category-section';
-    categoryEl.innerHTML = `
-      <div class="category-header">
-        <h3>${categoryName}</h3>
-      </div>
-      <div class="recipes-container" id="category-${category}"></div>
-    `;
-    el.appendChild(categoryEl);
-
-    // Ordena as receitas da categoria em ordem alfabética
-    const sortedRecipes = [...recipesByCategory[category]].sort((a, b) =>
-      a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' })
-    );
-
-    // Renderiza as receitas desta categoria
-    const container = qs(`#category-${category}`);
-    sortedRecipes.forEach((recipe, idx) => {
-      const node = document.createElement('div');
-      node.className = 'item';
-      const freqInfo = frequencyLevels.find(f => f.level === (recipe.frequency || 3)) || frequencyLevels[2];
-
-      node.innerHTML = `
-        <div style="flex:1">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <strong>${recipe.name}</strong>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <button data-idx="${getRecipeIndex(recipe)}" data-action="view" class="btn-ghost" style="flex:1">
-              Ver detalhes
-            </button>
-            <button data-idx="${getRecipeIndex(recipe)}" data-action="edit" class="btn-ghost" style="flex:1">
-              Editar
-            </button>
-            <button data-idx="${getRecipeIndex(recipe)}" data-action="delete" class="btn-ghost" style="flex:1">
-              Excluir
-            </button>
-          </div>
-        </div>
-      `;
-      container.appendChild(node);
-    });
-  });
-
-  // Adiciona os eventos dos botões
-  el.querySelectorAll('button[data-idx]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const idx = Number(btn.dataset.idx);
-      const action = btn.dataset.action;
-      const recipe = window.recipes[idx];
-
-      if (!recipe) return;
-
-      if (action === 'delete') {
-        if (confirm(`Tem certeza que deseja excluir a receita "${recipe.name}"?`)) {
-          window.recipes.splice(idx, 1);
-          window.saveAll();
-          renderRecipeList();
-          setAlert(`Receita excluída: ${recipe.name}`, 'success');
-        }
-      } else if (action === 'edit') {
-        loadRecipeForEdit(idx);
-      } else if (action === 'view') {
-        showRecipeDetails(recipe);
-      }
-    });
-  });
-}
-
-
-function showRecipeDetails(recipe) {
-  if (!recipe) return;
-
-  const freqInfo = frequencyLevels.find(f => f.level === (recipe.frequency || 3)) || frequencyLevels[2];
-  const macros = recipe.macros || { carbo: 0, proteina: 0, vegetais: 0, gordura: 0 };
-
-  const ingredientsHtml = recipe.ingredients && recipe.ingredients.length > 0
-    ? recipe.ingredients.map(ing => `<li>${formatIngredientForTextarea(ing)}: ${ing.qty} ${ing.unit}</li>`).join('')
-    : '<li>Nenhum ingrediente cadastrado</li>';
-
-  const macrosHtml = MACRO_TAGS
-    .map(tag => `<li>${tag.label}: ${macros[tag.key] || 0}%</li>`)
-    .join('');
-
-  const html = `
-    <div style="padding: 16px;">
-      <h3 style="margin-bottom: 16px; color: var(--accent);">${recipe.name}</h3>
-
-      <div style="display: grid; gap: 12px; margin-bottom: 20px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #f5f5f5; border-radius: 6px;">
-          <span><strong>Porções:</strong></span>
-          <span>${recipe.servings || 4} pessoas</span>
-        </div>
-
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #f5f5f5; border-radius: 6px;">
-          <span><strong>Frequência:</strong></span>
-          <span>${freqInfo.label}</span>
-        </div>
-      </div>
-
-      <div style="margin-bottom: 20px;">
-        <strong style="margin-bottom: 8px; display: block;">Macros:</strong>
-        <ul style="margin: 0; padding-left: 20px; background: #f9f9f9; padding: 12px; border-radius: 6px; border-left: 3px solid var(--accent);">
-          ${macrosHtml}
-        </ul>
-      </div>
-
-      <div>
-        <strong style="margin-bottom: 8px; display: block;">Ingredientes:</strong>
-        <ul style="margin: 0; padding-left: 20px; background: #f9f9f9; padding: 12px; border-radius: 6px; border-left: 3px solid var(--accent);">
-          ${ingredientsHtml}
-        </ul>
-      </div>
-    </div>
-  `;
-
-  openModal(`Detalhes: ${recipe.name}`, html);
-}
-
-function clearRecipeForm() {
-  qs('#m_recName').value = '';
-  qs('#m_recFrequency').value = '';
-  qs('#m_recCategory').value = '';
-  qs('#m_recServings').value = '4';
-  qs('#m_recIngredients').value = '';
-  currentEditIndex = -1;
-  qs('#m_addRec').textContent = 'Salvar Receita';
-}
-
-
-// Função auxiliar para encontrar o índice de uma receita
-function getRecipeIndex(recipe) {
   return window.recipes.findIndex(r =>
     r.name === recipe.name &&
     JSON.stringify(r.ingredients) === JSON.stringify(recipe.ingredients)
   );
 }
 
-function loadRecipeForEdit(idx) {
-  const recipe = window.recipes[idx];
-  if (!recipe) return;
-
-  const nameInput = qs('#m_recName');
-  const servingsInput = qs('#m_recServings');
-  const categorySelect = qs('#m_recCategory');
-  const frequencySelect = qs('#m_recFrequency');
-  const ingredientsTextarea = qs('#m_recIngredients');
-
-  if (nameInput) nameInput.value = recipe.name || '';
-  if (servingsInput) servingsInput.value = recipe.servings || 4;
-  if (categorySelect) categorySelect.value = recipe.category || 'verdura';
-  if (frequencySelect) frequencySelect.value = recipe.frequency || 3;
-
-  selectedMacros = normalizeMacroSelection(recipe.macros || {});
-  setMacroTagButtonState();
-
-  // Preenche os ingredientes
-  if (ingredientsTextarea) {
-    ingredientsTextarea.value = recipe.ingredients
-      .map(ing => {
-        const name = formatIngredientForTextarea(ing);
-        const qty = typeof ing.qty !== 'undefined' ? ing.qty : '';
-        const unit = ing.unit || '';
-        return `${name},${qty},${unit}`;
-      })
-      .filter(line => line !== ',,')
-      .join('\n');
+function getKnownIngredients() {
+  try {
+    return barcodeScanner.getKnownIngredients();
+  } catch {
+    return [];
   }
+}
 
-  // Remove a receita antiga
-  window.recipes.splice(idx, 1);
-  window.saveAll();
+// ---------------------------------------------------------------------------
+// Lista de receitas
+// ---------------------------------------------------------------------------
+
+export function showRecipes(message = null) {
+  if (window.recipes.length <= 5) searchTerm = '';
+
+  const html = `
+    <div class="rc">
+      <div class="rc-add">
+        <div class="rc-add-title">Adicionar receita</div>
+        <button type="button" class="rc-add-main" data-rc="photo">
+          <span class="rc-add-icon">📷</span>
+          <span><strong>Tirar foto da receita</strong><small>de livro, caderno escrito à mão ou print</small></span>
+        </button>
+        <div class="rc-add-row">
+          <button type="button" class="rc-add-alt" data-rc="new">✍️ Digitar</button>
+          <button type="button" class="rc-add-alt" data-rc="text">🎤 Colar ou falar</button>
+        </div>
+        <input type="file" id="rc_photoInput" accept="image/*" multiple hidden />
+      </div>
+      <div id="rc_status"></div>
+      <div class="rc-list-head">
+        <strong>Suas receitas (${window.recipes.length})</strong>
+      </div>
+      ${window.recipes.length > 5 ? `<input id="rc_search" class="rc-search" type="search" placeholder="🔎 Buscar receita" value="${escapeHtml(searchTerm)}" />` : ''}
+      <div id="rc_list" class="rc-list"></div>
+    </div>
+  `;
+
+  openModal('Receitas', html);
+  if (message) showStatus(message.text, message.level);
+
+  qs('#rc_photoInput')?.addEventListener('change', handlePhotoSelected);
+  qs('#rc_search')?.addEventListener('input', (e) => {
+    searchTerm = e.target.value;
+    renderRecipeList();
+  });
+
   renderRecipeList();
-  setAlert(`Editando: ${recipe.name}. Faça as alterações e clique em Salvar.`, 'info');
-  currentEditIndex = idx;
 }
 
-// --- autocomplete helpers --------------------------------------------------
-
-// normaliza texto removendo acentos e caracteres especiais para comparação
-function normalizeText(text) {
-  // remove diacritics like á â ã etc so comparisons are accent-insensitive
-  return text
-    .toString()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
-}
-
-// retorna o prefixo do ingrediente sendo editado no textarea (antes da vírgula)
-function getCurrentIngredientPrefix(textarea) {
-  const pos = textarea.selectionStart;
-  const before = textarea.value.substring(0, pos);
-  const lines = before.split('\n');
-  const current = lines[lines.length - 1];
-  return current.split(',')[0].trim();
-}
-
-// calcula coordenadas do caret dentro do textarea (fantasma div)
-function getCaretCoordinates(el, position) {
-  const div = document.createElement('div');
-  const style = window.getComputedStyle(el);
-  Array.from(style).forEach(name => {
-    div.style[name] = style[name];
-  });
-  div.style.position = 'absolute';
-  div.style.visibility = 'hidden';
-  div.style.whiteSpace = 'pre-wrap';
-  div.style.wordWrap = 'break-word';
-  div.style.overflow = 'auto';
-  div.style.width = el.offsetWidth + 'px';
-  div.textContent = el.value.substring(0, position);
-  const span = document.createElement('span');
-  span.textContent = el.value.substring(position) || '.';
-  div.appendChild(span);
-  document.body.appendChild(div);
-  const coords = { top: span.offsetTop, left: span.offsetLeft };
-  document.body.removeChild(div);
-  return coords;
-}
-
-// aplica sugestão ao textarea substituindo o prefixo atual
-function applySuggestion(textarea, suggestion) {
-  const pos = textarea.selectionStart;
-  const before = textarea.value.substring(0, pos);
-  const after = textarea.value.substring(pos);
-
-  const lines = before.split('\n');
-  let current = lines[lines.length - 1];
-  const commaIdx = current.indexOf(',');
-  if (commaIdx >= 0) {
-    // there is already a comma, keep the remainder (quantity/unit)
-    current = suggestion + current.substring(commaIdx);
-  } else {
-    // no comma yet: replace prefix and add a comma to help user continue
-    current = suggestion + ',';
+function showStatus(text, level = 'info', { loading = false } = {}) {
+  const el = qs('#rc_status');
+  if (!el) return;
+  if (!text) {
+    el.innerHTML = '';
+    return;
   }
-  lines[lines.length - 1] = current;
-  const newBefore = lines.join('\n');
-  textarea.value = newBefore + after;
-  const newPos = newBefore.length;
-  textarea.setSelectionRange(newPos, newPos);
-  textarea.focus();
-  qs('#ingredientSuggestions').classList.remove('active');
+  el.innerHTML = `<div class="rc-status rc-status-${level}">${loading ? '<span class="rc-spinner"></span>' : ''}<span>${escapeHtml(text)}</span></div>`;
 }
 
-// configura o comportamento de autocomplete no textarea de ingredientes
-function setupIngredientAutocomplete() {
-  const textarea = qs('#m_recIngredients');
-  const box = qs('#ingredientSuggestions');
-  if (!textarea || !box) return;
+function renderRecipeList() {
+  const el = qs('#rc_list');
+  if (!el) return;
 
-  let currentMatches = [];
-  let selectedIndex = -1;
+  renderedRecipes = [];
 
-  function updateHighlight() {
-    const items = box.querySelectorAll('.suggestion-item');
-    items.forEach((item, i) => {
-      if (i === selectedIndex) {
-        item.classList.add('highlighted');
-      } else {
-        item.classList.remove('highlighted');
-      }
-    });
-  }
-
-  textarea.addEventListener('input', () => {
-    const pos = textarea.selectionStart;
-    const before = textarea.value.substring(0, pos);
-    // se o caractere imediatamente anterior for vírgula, estamos na quantidade/uni e não devemos sugerir
-    if (before.endsWith(',')) {
-      box.classList.remove('active');
-      currentMatches = [];
-      selectedIndex = -1;
-      return;
-    }
-
-    const prefix = getCurrentIngredientPrefix(textarea);
-    if (!prefix) {
-      box.classList.remove('active');
-      currentMatches = [];
-      selectedIndex = -1;
-      return;
-    }
-
-    const normalizedPrefix = normalizeText(prefix);
-    const uniqueNames = Array.from(new Set((window.inventory || []).map(i => i.name)));
-    currentMatches = uniqueNames.filter(name =>
-      normalizeText(name).startsWith(normalizedPrefix)
-    );
-
-    if (currentMatches.length === 0) {
-      box.classList.remove('active');
-      selectedIndex = -1;
-      return;
-    }
-
-    box.innerHTML = currentMatches
-      .map(m => `<li class="suggestion-item" style="padding:2px 0;cursor:pointer">${m}</li>`)
-      .join('');
-    box.classList.add('active');
-    selectedIndex = -1;
-
-    // position box near caret, just below the current line
-    const coords = getCaretCoordinates(textarea, textarea.selectionStart);
-    // account for vertical scrolling inside textarea
-    const scrollTop = textarea.scrollTop;
-    box.style.left = coords.left + 'px';
-    // place well below the current line so it doesn't cover the text being typed
-    box.style.top = (coords.top - scrollTop + 20) + 'px';
-
-    box.querySelectorAll('.suggestion-item').forEach((el, idx) => {
-      el.addEventListener('mousedown', e => {
-        e.preventDefault();
-        applySuggestion(textarea, currentMatches[idx]);
-      });
-    });
-  });
-  textarea.addEventListener('keydown', (e) => {
-    if (!box.classList.contains('active') || currentMatches.length === 0) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      selectedIndex = (selectedIndex + 1) % currentMatches.length;
-      updateHighlight();
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      selectedIndex = (selectedIndex - 1 + currentMatches.length) % currentMatches.length;
-      updateHighlight();
-    } else if (e.key === 'Enter' && selectedIndex >= 0) {
-      e.preventDefault();
-      applySuggestion(textarea, currentMatches[selectedIndex]);
-    }
-  });
-
-  textarea.addEventListener('blur', () => {
-    setTimeout(() => { box.classList.remove('active'); }, 150);
-  });
-}
-
-document.addEventListener('click', (e) => {
-  const macroTagButton = e.target.closest('[data-macro-tag]');
-
-  if (macroTagButton) {
-    e.preventDefault();
-    toggleMacroTag(macroTagButton.dataset.macroTag);
+  if (window.recipes.length === 0) {
+    el.innerHTML = '<div class="rc-empty">Nenhuma receita ainda. Comece tirando uma foto de uma receita que vocês fazem sempre!</div>';
     return;
   }
 
-  // Salvar receita
-  if (e.target.id === 'm_addRec') {
-    const name = qs('#m_recName').value.trim().toLowerCase().replace(/^\w/, c => c.toUpperCase());
-    const frequencyValue = qs('#m_recFrequency').value;
-    const categoryValue = qs('#m_recCategory').value;
-    const servings = Math.max(1, parseInt(qs('#m_recServings').value) || 4);
+  const term = normalizeIngredientText(searchTerm);
+  const visible = window.recipes.filter(recipe => !term || normalizeIngredientText(recipe.name).includes(term));
 
-    const ingredientsText = qs('#m_recIngredients').value.trim();
-    const ingredientLines = ingredientsText
-      .split('\n')
-      .map(line => line.trim())
-      .filter(Boolean);
-
-    // Valida ANTES de fazer filter: se tem linhas, todas precisam de quantidade
-    let ingredientValidationError = '';
-    let invalidUnits = [];
-    ingredientLines.forEach(line => {
-      const parts = line.split(',').map(s => s.trim());
-      const ingredientName = parts[0];
-
-      // Se tem nome mas sem vírgula = esqueceu completamente da quantidade
-      if (ingredientName && !line.includes(',')) {
-        ingredientValidationError = `Ingrediente '${ingredientName}' da receita '${name}' incompleto`;
-      }
-      // Se tem vírgula mas não tem pelo menos 2 partes = formato inválido
-      if (ingredientName && line.includes(',') && parts.length < 2) {
-        ingredientValidationError = `Ingrediente '${ingredientName}' da receita '${name}' incompleto`;
-      }
-    });
-
-    const ingredients = ingredientLines
-      .map(line => {
-        const parts = line.split(',').map(s => s.trim());
-        let name, qty, unit;
-
-        if (parts.length >= 2) {
-          name = parts[0];
-
-          // Se temos 3+ partes, assume nome,qtd,unidade
-          if (parts.length >= 3) {
-            qty = parts[1];
-            unit = parts.slice(2).join(' ').trim();
-
-            // Se a quantidade parece incompleta (ex: "0" quando deveria ser "0,2")
-            // e a unidade começa com dígito, tenta recombinação
-            const testQty = parseFloat(qty.replace(',', '.')) || 0;
-            if (testQty === 0 && unit && /^[\d,.]/.test(unit)) {
-              // Qty é 0 e unit começa com dígito/vírgula: provavelmente separação incorreta
-              const firstUnitPart = unit.split(' ')[0];
-              if (/^[\d,.]+/.test(firstUnitPart)) {
-                qty = qty + ',' + firstUnitPart; // "0" + "," + "2" = "0,2"
-                unit = unit.split(' ').slice(1).join(' ').trim() || 'un';
-              }
-            }
-          } else {
-            // 2 partes: nome,qtd+unidade ou nome,qtd
-            const qtyUnit = parts[1];
-
-            // Tenta detectar se é só quantidade (números) ou quantidade+unidade
-            if (/^\d+([,.]\d+)?$/.test(qtyUnit)) {
-              // Só números: assume que é quantidade sem unidade
-              qty = qtyUnit;
-              unit = 'un';
-            } else {
-              // Contém letras/não-números: tenta separar quantidade e unidade
-              const qtyMatch = qtyUnit.match(/^([\d,.]+)(.*)$/);
-              if (qtyMatch) {
-                qty = qtyMatch[1];
-                unit = qtyMatch[2].trim() || 'un';
-              } else {
-                // Não conseguiu separar, assume tudo como quantidade
-                qty = qtyUnit;
-                unit = 'un';
-              }
-            }
-          }
-        } else {
-          // Menos de 2 partes: inválido
-          name = parts[0] || '';
-          qty = '0';
-          unit = 'un';
-        }
-
-        const quantity = parseFloat(qty.replace(',', '.')) || 0;
-
-        // Verifica se a unidade é válida antes de normalizar
-        if (!isValidUnit(unit)) {
-          invalidUnits.push(unit);
-          return null; // Ingrediente inválido
-        }
-
-        // Normaliza a unidade antes de salvar
-        const normalized = normalizeUnit(quantity, unit || 'un');
-        const { primary, alternatives } = splitIngredientAlternatives(name);
-
-        return {
-          name: primary,
-          alternatives: alternatives.length > 0 ? alternatives : undefined,
-          qty: normalized.qty,
-          unit: normalized.unit
-        };
-      })
-      .filter(ing => ing !== null && ing.name && !isNaN(ing.qty) && ing.qty > 0);
-
-    // Verifica unidades inválidas
-    if (invalidUnits.length > 0) {
-      const validUnits = getValidUnits();
-      const uniqueInvalid = [...new Set(invalidUnits)];
-      return setAlert(`Unidades não suportadas: ${uniqueInvalid.join(', ')}. Use apenas: ${validUnits.join(', ')}`, 'error', 0);
-    }
-
-    if (!name) return setAlert('Digite um nome para a receita', 'error', 0);
-    if (!frequencyValue) return setAlert('Selecione a frequência da receita', 'error', 0);
-    if (!categoryValue || categoryValue === '') return setAlert('Selecione o tipo de refeição', 'error', 0);
-    if (ingredientValidationError) return setAlert(ingredientValidationError, 'error', 0);
-    if (ingredients.length === 0) return setAlert('Adicione pelo menos um ingrediente', 'error', 0);
-
-    const frequency = parseInt(frequencyValue);
-    const category = categoryValue;
-    const isEditing = currentEditIndex >= 0;
-    const macros = getMacroValues();
-    const recipe = {
-      name,
-      frequency,
-      servings,
-      category,
-      ingredients,
-      macros
-    };
-
-    if (isEditing) {
-      // Se está editando, substitui a receita existente
-      window.recipes.splice(currentEditIndex, 0, recipe);
-      currentEditIndex = -1;
-    } else {
-      // Se é uma nova receita, adiciona normalmente
-      window.recipes.push(recipe);
-    }
-
-    const createdIngredients = ensureInventoryItemsForRecipe(ingredients);
-    clearAlerts();
-    if (createdIngredients.length > 0) {
-      setAlert('Detectamos ingredientes novos! Eles foram adicionados à sua despensa com quantidade zero para ajudar na sua próxima lista de compras.', 'info', 0);
-    }
-
-    window.saveAll();
-
-    // Limpa o formulário
-    qs('#m_recName').value = '';
-    qs('#m_recServings').value = '4';
-    qs('#m_recFrequency').value = '';
-    qs('#m_recCategory').value = '';
-    qs('#m_recIngredients').value = '';
-    resetMacroSelection();
-    currentEditIndex = -1;
-
-    renderRecipeList();
-    setAlert(`Receita ${isEditing ? 'atualizada' : 'salva'}: ${name}`, 'success');
+  if (visible.length === 0) {
+    el.innerHTML = '<div class="rc-empty">Nenhuma receita com esse nome.</div>';
+    return;
   }
 
-  // Limpar formulário
-  if (e.target.id === 'm_clearRec') {
-    if (confirm('Limpar o formulário de receita?')) {
-      qs('#m_recName').value = '';
-      qs('#m_recServings').value = '4';
-      qs('#m_recFrequency').value = '';
-      qs('#m_recCategory').value = '';
-      qs('#m_recIngredients').value = '';
-      resetMacroSelection();
-      currentEditIndex = -1;
+  el.innerHTML = CATEGORY_GROUPS.map(group => {
+    const recipes = visible
+      .filter(recipe => getCategoryGroup(recipe.category) === group.key)
+      .sort((a, b) => String(a.name).localeCompare(String(b.name), 'pt-BR', { sensitivity: 'base' }));
+
+    if (recipes.length === 0) return '';
+
+    return `
+      <section class="rc-group">
+        <h3 class="rc-group-title">${group.label} <span>${recipes.length}</span></h3>
+        ${recipes.map(recipe => renderRecipeCard(recipe)).join('')}
+      </section>
+    `;
+  }).join('');
+}
+
+function renderRecipeCard(recipe) {
+  const ref = renderedRecipes.push(recipe) - 1;
+  const freqInfo = frequencyLevels.find(f => f.level === (recipe.frequency || 3)) || frequencyLevels[2];
+  const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+  const macros = getRecipeMacroSelection(recipe);
+
+  const ingredientsHtml = ingredients.length > 0
+    ? ingredients.map(ing => `
+        <li><span>${escapeHtml(formatIngredientName(ing).replace(/ \|\| /g, ' ou '))}</span><span>${escapeHtml(formatQty(ing.qty))} ${escapeHtml(ing.unit || '')}</span></li>
+      `).join('')
+    : '<li><span>Nenhum ingrediente cadastrado</span></li>';
+
+  const macrosHtml = MACRO_TAGS
+    .filter(tag => macros.has(tag.key))
+    .map(tag => `<span class="rc-tag">${tag.label}</span>`)
+    .join('');
+
+  return `
+    <div class="rc-card">
+      <button type="button" class="rc-card-head" data-rc="toggle" data-ref="${ref}">
+        <span class="rc-card-name">${escapeHtml(recipe.name)}</span>
+        <span class="rc-card-meta">${recipe.servings || 4} porções · ${freqInfo.label} · ${ingredients.length} ingred.</span>
+      </button>
+      <div class="rc-card-body" hidden>
+        ${macrosHtml ? `<div class="rc-tags">${macrosHtml}</div>` : ''}
+        <ul class="rc-ing-view">${ingredientsHtml}</ul>
+        <div class="rc-card-actions">
+          <button type="button" class="btn-ghost" data-rc="edit" data-ref="${ref}">✏️ Editar</button>
+          <button type="button" class="btn-ghost rc-danger" data-rc="delete" data-ref="${ref}">🗑️ Excluir</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function deleteRecipe(recipe) {
+  if (!recipe || !confirm(`Excluir a receita "${recipe.name}"?`)) return;
+
+  const idx = findRecipeIndex(recipe);
+  if (idx < 0) return;
+
+  window.recipes.splice(idx, 1);
+  window.saveAll();
+  showRecipes({ text: `Receita excluída: ${recipe.name}`, level: 'success' });
+}
+
+// ---------------------------------------------------------------------------
+// Formulário (nova receita, edição e conferência da receita lida da foto)
+// ---------------------------------------------------------------------------
+
+function ingredientRowHtml(ing = {}) {
+  const unit = UNITS.includes(ing.unit) ? ing.unit : 'g';
+  const original = ing.original && normalizeIngredientText(ing.original) !== normalizeIngredientText(ing.name)
+    ? `<div class="rc-ing-original">Na receita: "${escapeHtml(ing.original)}"</div>`
+    : '';
+
+  return `
+    <div class="rc-ing-row${ing.missing ? ' rc-missing' : ''}">
+      <input class="rc-ing-name" list="rc_known" placeholder="Ingrediente" value="${escapeHtml(ing.name || '')}" autocomplete="off" />
+      <input class="rc-ing-qty" type="text" inputmode="decimal" placeholder="Qtd" value="${escapeHtml(ing.qty ? formatQty(ing.qty) : '')}" />
+      <select class="rc-ing-unit">
+        ${UNITS.map(u => `<option value="${u}"${u === unit ? ' selected' : ''}>${u}</option>`).join('')}
+      </select>
+      <button type="button" class="rc-ing-remove" data-rc="remove-ing" aria-label="Remover ingrediente">✕</button>
+      ${original}
+    </div>
+  `;
+}
+
+// draft: { name, servings, frequency, macros:Set, ingredients:[{name, qty, unit, original, missing}] }
+function openRecipeForm(draft, { recipe = null, issues = [], imported = false } = {}) {
+  editingRecipe = recipe;
+  selectedMacros = new Set(draft.macros || []);
+  selectedFrequency = draft.frequency || 3;
+
+  const ingredients = draft.ingredients && draft.ingredients.length > 0
+    ? draft.ingredients
+    : [{}, {}, {}];
+
+  const knownNames = Array.from(new Set(getKnownIngredients().map(item => item.name)));
+
+  const issuesHtml = issues.length > 0
+    ? `<div class="rc-check">
+        <strong>${imported ? 'Confira antes de salvar' : 'Atenção'}</strong>
+        <ul>${issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join('')}</ul>
+      </div>`
+    : '';
+
+  const html = `
+    <div class="rc rc-form" data-imported="${imported ? '1' : ''}">
+      ${issuesHtml}
+      <div id="rc_formMsg"></div>
+
+      <label class="rc-label" for="rc_name">Nome da receita</label>
+      <input id="rc_name" class="${draft.nameMissing ? 'rc-input-missing' : ''}" placeholder="Ex: Frango com batata" value="${escapeHtml(draft.name || '')}" />
+
+      <label class="rc-label" for="rc_servings">Rende quantas porções?</label>
+      <div class="rc-stepper${draft.servingsMissing ? ' rc-input-missing' : ''}">
+        <button type="button" data-rc="serv-minus" aria-label="Menos">−</button>
+        <input id="rc_servings" type="number" inputmode="numeric" min="1" value="${draft.servings || 4}" />
+        <button type="button" data-rc="serv-plus" aria-label="Mais">+</button>
+      </div>
+
+      <div class="rc-label">Com que frequência querem comer?</div>
+      <div class="rc-chips" id="rc_freq">
+        ${frequencyLevels.map(f => `<button type="button" class="rc-chip" data-rc="freq" data-value="${f.level}">${f.label}</button>`).join('')}
+      </div>
+
+      <div class="rc-label">O que essa receita tem? <small>(pode marcar mais de um)</small></div>
+      <div class="rc-chips" id="rc_macros">
+        ${MACRO_TAGS.map(tag => `<button type="button" class="rc-chip" data-rc="macro" data-value="${tag.key}">${tag.label}</button>`).join('')}
+      </div>
+
+      <div class="rc-label">Ingredientes</div>
+      <div class="rc-ing-head"><span>Nome</span><span>Qtd</span><span>Unid.</span><span></span></div>
+      <div id="rc_ings">${ingredients.map(ing => ingredientRowHtml(ing)).join('')}</div>
+      <button type="button" class="rc-add-ing" data-rc="add-ing">+ Adicionar ingrediente</button>
+      <p class="rc-hint">Pode usar um ou outro? Escreva os dois com || no meio. Ex: penne || parafuso</p>
+
+      <datalist id="rc_known">${knownNames.map(name => `<option value="${escapeHtml(name)}"></option>`).join('')}</datalist>
+
+      <div class="rc-form-actions">
+        <button type="button" class="btn-ghost" data-rc="cancel">Cancelar</button>
+        <button type="button" data-rc="save">${recipe ? 'Salvar alterações' : 'Salvar receita'}</button>
+      </div>
+    </div>
+  `;
+
+  openModal(recipe ? 'Editar receita' : 'Nova receita', html);
+  updateChipStates();
+
+  // Ao escolher um ingrediente conhecido, já usa a mesma unidade da despensa
+  qs('#rc_ings')?.addEventListener('change', (e) => {
+    if (!e.target.classList.contains('rc-ing-name')) return;
+    const row = e.target.closest('.rc-ing-row');
+    const name = normalizeIngredientText(splitIngredientAlternatives(e.target.value).primary);
+    const known = getKnownIngredients().find(item => normalizeIngredientText(item.name) === name);
+    const unitSelect = row?.querySelector('.rc-ing-unit');
+    if (known && unitSelect && UNITS.includes(known.unit)) unitSelect.value = known.unit;
+  });
+
+  qs('#rc_ings')?.addEventListener('input', (e) => {
+    e.target.closest('.rc-ing-row')?.classList.remove('rc-missing');
+  });
+  qs('#rc_name')?.addEventListener('input', (e) => e.target.classList.remove('rc-input-missing'));
+}
+
+function updateChipStates() {
+  document.querySelectorAll('[data-rc="freq"]').forEach(btn => {
+    btn.classList.toggle('active', Number(btn.dataset.value) === selectedFrequency);
+  });
+  document.querySelectorAll('[data-rc="macro"]').forEach(btn => {
+    btn.classList.toggle('active', selectedMacros.has(btn.dataset.value));
+  });
+}
+
+function recipeToDraft(recipe) {
+  return {
+    name: recipe.name || '',
+    servings: recipe.servings || 4,
+    frequency: recipe.frequency || 3,
+    macros: getRecipeMacroSelection(recipe),
+    ingredients: (recipe.ingredients || []).map(ing => ({
+      name: formatIngredientName(ing),
+      qty: ing.qty,
+      unit: ing.unit
+    }))
+  };
+}
+
+function showFormMessage(problems) {
+  const el = qs('#rc_formMsg');
+  if (!el) return;
+  el.innerHTML = problems.length
+    ? `<div class="rc-check rc-check-error"><strong>Falta pouco:</strong><ul>${problems.map(p => `<li>${escapeHtml(p)}</li>`).join('')}</ul></div>`
+    : '';
+  if (problems.length) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function saveRecipeFromForm() {
+  const problems = [];
+  const nameInput = qs('#rc_name');
+  const name = nameInput.value.trim().toLowerCase().replace(/^\w/, c => c.toUpperCase());
+  const servings = parseInt(qs('#rc_servings').value, 10);
+
+  if (!name) {
+    problems.push('Escreva o nome da receita.');
+    nameInput.classList.add('rc-input-missing');
+  }
+  if (!servings || servings < 1) {
+    problems.push('Diga quantas porções a receita rende.');
+  }
+
+  const ingredients = [];
+  const missingQty = [];
+  const missingName = [];
+
+  document.querySelectorAll('#rc_ings .rc-ing-row').forEach(row => {
+    const rawName = row.querySelector('.rc-ing-name').value.trim();
+    const rawQty = row.querySelector('.rc-ing-qty').value.trim();
+    const unit = row.querySelector('.rc-ing-unit').value;
+
+    // Linha vazia: só ignora
+    if (!rawName && !rawQty) return;
+
+    const quantity = parseQty(rawQty);
+    if (!rawName) {
+      missingName.push(rawQty);
+      row.classList.add('rc-missing');
+      return;
     }
+    if (quantity <= 0) {
+      missingQty.push(rawName);
+      row.classList.add('rc-missing');
+      return;
+    }
+
+    // Mesmo formato de antes: kg vira g, l vira ml; nome sem acento e alternativas separadas
+    const normalized = normalizeUnit(quantity, unit) || { qty: quantity, unit: 'un' };
+    const { primary, alternatives } = splitIngredientAlternatives(rawName);
+    const ingredient = { name: primary, qty: normalized.qty, unit: normalized.unit };
+    if (alternatives.length > 0) ingredient.alternatives = alternatives;
+    ingredients.push(ingredient);
+  });
+
+  if (missingQty.length > 0) {
+    problems.push(`Falta a quantidade de: ${missingQty.join(', ')}. Preencha ou toque no ✕ para tirar da receita.`);
+  }
+  if (missingName.length > 0) {
+    problems.push('Tem quantidade sem nome de ingrediente. Escreva o nome ou toque no ✕.');
+  }
+  if (ingredients.length === 0 && missingQty.length === 0 && missingName.length === 0) {
+    problems.push('Adicione pelo menos um ingrediente.');
+  }
+
+  if (problems.length > 0) {
+    showFormMessage(problems);
+    return;
+  }
+
+  const isEditing = !!editingRecipe;
+  if (!isEditing) {
+    const duplicate = window.recipes.some(r => normalizeIngredientText(r.name) === normalizeIngredientText(name));
+    if (duplicate && !confirm(`Já existe uma receita chamada "${name}". Salvar mesmo assim?`)) return;
+  }
+
+  const recipe = {
+    ...(editingRecipe || {}),
+    name,
+    frequency: selectedFrequency,
+    servings,
+    category: getCategoryFromMacros(),
+    ingredients,
+    macros: getMacroValues()
+  };
+
+  const idx = isEditing ? findRecipeIndex(editingRecipe) : -1;
+  if (idx >= 0) {
+    window.recipes[idx] = recipe;
+  } else {
+    window.recipes.push(recipe);
+  }
+  editingRecipe = null;
+
+  const createdIngredients = ensureInventoryItemsForRecipe(ingredients);
+  window.saveAll();
+
+  if (createdIngredients.length > 0) {
+    setAlert('Ingredientes novos foram adicionados à despensa com quantidade zero, para entrarem na lista de compras.', 'info', 8000);
+  }
+  showRecipes({ text: `Receita ${isEditing ? 'atualizada' : 'salva'}: ${name}`, level: 'success' });
+}
+
+// ---------------------------------------------------------------------------
+// Ler receita por foto ou texto (servidor + IA)
+// ---------------------------------------------------------------------------
+
+// Reduz a foto para enviar rápido (e caber no limite do servidor)
+function imageFileToJpeg(file, maxSide = 1600, quality = 0.8) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.naturalWidth * scale);
+        canvas.height = Math.round(img.naturalHeight * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', quality).split(',')[1]);
+      } catch (error) {
+        reject(error);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Não consegui abrir essa imagem. Tente tirar a foto de novo.'));
+    };
+    img.src = url;
+  });
+}
+
+async function requestRecipe(body) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), RECIPE_TIMEOUT_MS);
+
+  try {
+    let response;
+    try {
+      response = await fetch(RECIPE_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, knownIngredients: getKnownIngredients() }),
+        signal: controller.signal
+      });
+    } catch (error) {
+      throw new Error(error?.name === 'AbortError'
+        ? 'O servidor demorou demais para responder. Tente de novo.'
+        : 'Sem conexão com o servidor. Verifique sua internet e tente de novo.');
+    }
+
+    if (response.status === 413) {
+      throw new Error('As fotos ficaram grandes demais. Tente com menos fotos.');
+    }
+
+    // Enquanto o Render acorda ele pode devolver uma página HTML em vez de JSON
+    let data = null;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error('O servidor ainda está iniciando. Aguarde alguns segundos e tente de novo.');
+    }
+
+    if (!response.ok || !data?.sucesso || !data.receita) {
+      throw new Error(data?.erro || `Erro ao ler a receita (${response.status}).`);
+    }
+
+    return data.receita;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Transforma a resposta do servidor no rascunho do formulário e lista o que faltou
+function importedToDraft(receita, fromPhoto) {
+  const issues = [];
+  const source = fromPhoto ? 'A foto' : 'O texto';
+
+  const ingredients = (receita.ingredientes || []).map(item => {
+    const name = [item.nome, ...(item.alternativas || [])].filter(Boolean).join(' || ');
+    const hasQty = Number(item.qtd) > 0 && UNITS.includes(item.unidade);
+    return {
+      name,
+      qty: hasQty ? item.qtd : '',
+      unit: hasQty ? item.unidade : 'g',
+      original: item.original || '',
+      missing: !hasQty
+    };
+  });
+
+  if (!receita.nome) {
+    issues.push(`${source} não mostra o nome da receita. Escreva um nome.`);
+  }
+  if (!receita.porcoes) {
+    issues.push(`${source} não diz quantas porções rende. Colocamos 4: ajuste se precisar.`);
+  }
+
+  const missingQty = ingredients.filter(ing => ing.missing).map(ing => ing.name);
+  if (missingQty.length > 0) {
+    issues.push(`Sem quantidade escrita (ex: "a gosto"): ${missingQty.join(', ')}. Preencha ou toque no ✕ para tirar.`);
+  }
+
+  const homeMeasure = /x[ií]cara|colher|copo|lata|caixinha|pitada|punhado|ma[cç]o/i;
+  if (ingredients.some(ing => !ing.missing && homeMeasure.test(ing.original))) {
+    issues.push('Medidas como xícara e colher foram convertidas para g/ml (valor aproximado). O texto original aparece embaixo de cada ingrediente.');
+  }
+
+  if (receita.observacao) {
+    issues.push(receita.observacao);
+  }
+
+  return {
+    draft: {
+      name: receita.nome || '',
+      nameMissing: !receita.nome,
+      servings: receita.porcoes || 4,
+      servingsMissing: !receita.porcoes,
+      frequency: 3,
+      macros: new Set(receita.macros || []),
+      ingredients
+    },
+    issues
+  };
+}
+
+async function handlePhotoSelected(e) {
+  const files = Array.from(e.target.files || []).slice(0, MAX_PHOTOS);
+  e.target.value = '';
+  if (files.length === 0) return;
+
+  const tooMany = (e.target.files?.length || 0) > MAX_PHOTOS;
+  setAddButtonsDisabled(true);
+  showStatus(`Lendo a receita${files.length > 1 ? ` (${files.length} fotos)` : ''}... pode levar até 1 minuto.`, 'info', { loading: true });
+
+  try {
+    const imagens = [];
+    for (const file of files) {
+      imagens.push({ mimeType: 'image/jpeg', data: await imageFileToJpeg(file) });
+    }
+
+    const receita = await requestRecipe({ imagens });
+    const { draft, issues } = importedToDraft(receita, true);
+    if (tooMany) issues.unshift(`Só usamos as ${MAX_PHOTOS} primeiras fotos.`);
+    openRecipeForm(draft, { issues, imported: true });
+  } catch (error) {
+    showStatus(error?.message || 'Não foi possível ler a receita.', 'error');
+    setAddButtonsDisabled(false);
+  }
+}
+
+function setAddButtonsDisabled(disabled) {
+  document.querySelectorAll('[data-rc="photo"], [data-rc="new"], [data-rc="text"]').forEach(btn => {
+    btn.disabled = disabled;
+  });
+}
+
+function showTextImport() {
+  const html = `
+    <div class="rc">
+      <p class="rc-hint" style="margin-top:0">
+        Cole a receita (de um site, do WhatsApp...) ou toque no 🎤 do teclado do celular e fale.
+        Diga o nome, quantas porções rende e cada ingrediente com a quantidade.
+      </p>
+      <textarea id="rc_text" class="rc-textarea" rows="9" placeholder="Ex: Bolo de cenoura, rende 8 porções. 3 cenouras, 3 ovos, 2 xícaras de farinha, 1 xícara de óleo, 2 xícaras de açúcar, 1 colher de fermento."></textarea>
+      <div id="rc_status"></div>
+      <div class="rc-form-actions">
+        <button type="button" class="btn-ghost" data-rc="back">Voltar</button>
+        <button type="button" data-rc="read-text">Ler receita</button>
+      </div>
+    </div>
+  `;
+  openModal('Colar ou falar receita', html);
+  qs('#rc_text')?.focus();
+}
+
+async function readTextRecipe(button) {
+  const texto = qs('#rc_text')?.value.trim();
+  if (!texto) {
+    showStatus('Escreva ou fale a receita primeiro.', 'error');
+    return;
+  }
+
+  button.disabled = true;
+  showStatus('Lendo a receita... pode levar até 1 minuto.', 'info', { loading: true });
+
+  try {
+    const receita = await requestRecipe({ texto });
+    const { draft, issues } = importedToDraft(receita, false);
+    openRecipeForm(draft, { issues, imported: true });
+  } catch (error) {
+    showStatus(error?.message || 'Não foi possível ler a receita.', 'error');
+    button.disabled = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cliques (um único listener para todas as telas de receita)
+// ---------------------------------------------------------------------------
+
+document.addEventListener('click', (e) => {
+  const target = e.target.closest('[data-rc]');
+  if (!target) return;
+
+  const action = target.dataset.rc;
+  const recipe = target.dataset.ref !== undefined ? renderedRecipes[Number(target.dataset.ref)] : null;
+
+  switch (action) {
+    case 'photo':
+      qs('#rc_photoInput')?.click();
+      break;
+    case 'new':
+      openRecipeForm({ frequency: 3, servings: 4 });
+      break;
+    case 'text':
+      showTextImport();
+      break;
+    case 'read-text':
+      readTextRecipe(target);
+      break;
+    case 'back':
+      showRecipes();
+      break;
+    case 'toggle': {
+      const body = target.parentElement.querySelector('.rc-card-body');
+      if (body) {
+        body.hidden = !body.hidden;
+        target.classList.toggle('open', !body.hidden);
+      }
+      break;
+    }
+    case 'edit':
+      if (recipe) openRecipeForm(recipeToDraft(recipe), { recipe });
+      break;
+    case 'delete':
+      deleteRecipe(recipe);
+      break;
+    case 'freq':
+      selectedFrequency = Number(target.dataset.value) || 3;
+      updateChipStates();
+      break;
+    case 'macro':
+      if (selectedMacros.has(target.dataset.value)) {
+        selectedMacros.delete(target.dataset.value);
+      } else {
+        selectedMacros.add(target.dataset.value);
+      }
+      updateChipStates();
+      break;
+    case 'serv-minus':
+    case 'serv-plus': {
+      const input = qs('#rc_servings');
+      const current = parseInt(input.value, 10) || 4;
+      input.value = Math.max(1, current + (action === 'serv-plus' ? 1 : -1));
+      input.parentElement.classList.remove('rc-input-missing');
+      break;
+    }
+    case 'add-ing': {
+      const list = qs('#rc_ings');
+      list.insertAdjacentHTML('beforeend', ingredientRowHtml());
+      list.lastElementChild.querySelector('.rc-ing-name').focus();
+      break;
+    }
+    case 'remove-ing':
+      target.closest('.rc-ing-row')?.remove();
+      break;
+    case 'cancel': {
+      const imported = qs('.rc-form')?.dataset.imported;
+      if (imported && !confirm('Sair sem salvar a receita lida?')) break;
+      editingRecipe = null;
+      showRecipes();
+      break;
+    }
+    case 'save':
+      saveRecipeFromForm();
+      break;
   }
 });
