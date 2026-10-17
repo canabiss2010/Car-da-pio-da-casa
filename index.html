@@ -123,13 +123,13 @@
       <a href="create.html" class="welcome-btn welcome-btn-primary">
         ✨ Criar Novo Cardápio
       </a>
-      <a id="joinExistingBtn" href="join.html" class="welcome-btn welcome-btn-secondary">
-        📱 Entrar em Cardápio Existente
+      <a href="create.html#entrar" class="welcome-btn welcome-btn-secondary">
+        🔑 Já tenho um cardápio
       </a>
     </div>
 
     <div class="welcome-footer">
-      <p>Organize as refeições de sua família com facilidade</p>
+      <p>Foi convidado pela família? É só abrir o link que recebeu no WhatsApp.</p>
     </div>
   </div>
 
@@ -146,15 +146,6 @@
       location.replace('cardapio_casa_pwa.html');
     }
 
-    const joinExistingBtn = document.getElementById('joinExistingBtn');
-    if (joinExistingBtn) {
-      joinExistingBtn.addEventListener('click', (event) => {
-        if (joinExistingBtn.getAttribute('href') !== 'join.html') {
-          event.preventDefault();
-          location.href = 'join.html';
-        }
-      });
-    }
   </script>
 </body>
 
