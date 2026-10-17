@@ -530,6 +530,9 @@ ${texto}
 ${fonte}
 
 Extraia SOMENTE o que está na receita. NUNCA invente ingrediente, quantidade ou rendimento que não esteja escrito.
+A receita pode ter várias partes (massa, recheio, cobertura, calda, molho): inclua os ingredientes de TODAS as partes.
+Se o mesmo ingrediente aparece em mais de uma parte, junte num só item SOMANDO as quantidades,
+e no "original" coloque os trechos separados por " + " (ex: "1 xícara de chocolate em pó (massa) + 4 colheres de sopa de chocolate em pó (cobertura)").
 
 Devolva:
 - "receita": false se não houver uma receita (ex: foto de outra coisa, texto sem ingredientes). Senão true.
@@ -577,7 +580,20 @@ function sanitizeRecipe(result) {
                 original: toText(item?.original, 120)
             };
         })
-        .filter((item) => item.nome);
+        .filter((item) => item.nome)
+        // Mesmo ingrediente em partes diferentes (massa + cobertura): soma num só
+        .reduce((list, item) => {
+            const same = list.find((other) => stripAccents(other.nome) === stripAccents(item.nome) &&
+                (!other.unidade || !item.unidade || other.unidade === item.unidade));
+            if (!same) return [...list, item];
+
+            if (item.qtd) {
+                same.qtd = round((same.qtd || 0) + item.qtd);
+                same.unidade = item.unidade;
+            }
+            same.original = [same.original, item.original].filter(Boolean).join(' + ').slice(0, 240);
+            return list;
+        }, []);
 
     return {
         receita: result?.receita !== false,

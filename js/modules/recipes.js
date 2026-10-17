@@ -33,6 +33,42 @@ const CATEGORY_GROUPS = [
 
 const UNITS = ['g', 'kg', 'ml', 'l', 'un'];
 
+// Medidas caseiras: só existem no formulário; ao salvar viram g ou ml
+const HOME_UNITS = [
+  { key: 'xic', label: 'xícara', short: 'xícara', perCup: 1 },
+  { key: 'cs', label: 'colher de sopa', short: 'c. sopa', perCup: 1 / 16 },
+  { key: 'cc', label: 'colher de chá', short: 'c. chá', perCup: 1 / 48 }
+];
+
+// Quanto pesa 1 xícara (240 ml) de cada ingrediente. O primeiro que bater vale,
+// por isso os nomes mais específicos vêm antes ("leite em po" antes de "leite").
+const CUP_WEIGHTS = [
+  ['leite condensado', 306, 'g'], ['leite em po', 100, 'g'], ['creme de leite', 240, 'g'],
+  ['chocolate em po', 90, 'g'], ['cacau', 90, 'g'], ['achocolatado', 90, 'g'],
+  ['chocolate', 160, 'g'], ['acucar mascavo', 150, 'g'], ['acucar de confeiteiro', 120, 'g'],
+  ['acucar', 180, 'g'], ['farinha de rosca', 110, 'g'], ['farinha de mandioca', 150, 'g'],
+  ['farinha', 120, 'g'], ['amido', 150, 'g'], ['maisena', 150, 'g'], ['fuba', 120, 'g'],
+  ['polvilho', 150, 'g'], ['tapioca', 150, 'g'], ['aveia', 80, 'g'], ['granola', 100, 'g'],
+  ['arroz', 185, 'g'], ['feijao', 180, 'g'], ['lentilha', 190, 'g'], ['grao de bico', 200, 'g'],
+  ['quinoa', 170, 'g'], ['milho', 160, 'g'], ['ervilha', 150, 'g'], ['coco ralado', 80, 'g'],
+  ['queijo ralado', 90, 'g'], ['queijo', 110, 'g'], ['manteiga', 200, 'g'], ['margarina', 200, 'g'],
+  ['requeijao', 240, 'g'], ['iogurte', 240, 'g'], ['mel', 340, 'g'], ['fermento', 225, 'g'],
+  ['bicarbonato', 220, 'g'], ['sal', 290, 'g'], ['canela', 110, 'g'], ['nozes', 100, 'g'],
+  ['castanha', 130, 'g'], ['amendoim', 140, 'g'], ['uva passa', 150, 'g'], ['gergelim', 140, 'g'],
+  ['chia', 160, 'g'], ['linhaca', 150, 'g'], ['oleo', 240, 'ml'], ['azeite', 240, 'ml'],
+  ['leite', 240, 'ml'], ['agua', 240, 'ml'], ['suco', 240, 'ml'], ['caldo', 240, 'ml'],
+  ['vinagre', 240, 'ml'], ['molho', 240, 'ml'], ['vinho', 240, 'ml'], ['cafe', 240, 'ml']
+];
+
+// "1 xícara de chocolate em pó" -> { qty: 90, unit: 'g' } (null se não souber)
+function convertHomeMeasure(name, qty, unitKey) {
+  const home = HOME_UNITS.find(u => u.key === unitKey);
+  const key = normalizeIngredientText(splitIngredientAlternatives(name).primary);
+  const match = home && CUP_WEIGHTS.find(([word]) => key.includes(word));
+  if (!match) return null;
+  return { qty: Math.round(match[1] * home.perCup * qty), unit: match[2] };
+}
+
 // Receita aberta no formulário (null = nova receita)
 let editingRecipe = null;
 let selectedMacros = new Set();
@@ -89,8 +125,14 @@ function formatQty(qty) {
   return String(Math.round(value * 1000) / 1000).replace('.', ',');
 }
 
+// Aceita "2", "0,5", "1/2" e "1 1/2"
 function parseQty(value) {
-  const parsed = parseFloat(String(value ?? '').trim().replace(',', '.'));
+  const text = String(value ?? '').trim().replace(',', '.');
+  const fraction = text.match(/^(?:(\d+)\s+)?(\d+)\/(\d+)$/);
+  if (fraction && Number(fraction[3]) > 0) {
+    return Number(fraction[1] || 0) + Number(fraction[2]) / Number(fraction[3]);
+  }
+  const parsed = parseFloat(text);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
@@ -338,8 +380,12 @@ function ingredientRowHtml(ing = {}) {
       <input class="rc-ing-qty" type="text" inputmode="decimal" placeholder="Qtd" value="${escapeHtml(ing.qty ? formatQty(ing.qty) : '')}" />
       <select class="rc-ing-unit">
         ${UNITS.map(u => `<option value="${u}"${u === unit ? ' selected' : ''}>${u}</option>`).join('')}
+        <optgroup label="Medida caseira">
+          ${HOME_UNITS.map(u => `<option value="${u.key}">${u.short}</option>`).join('')}
+        </optgroup>
       </select>
       <button type="button" class="rc-ing-remove" data-rc="remove-ing" aria-label="Remover ingrediente">✕</button>
+      <div class="rc-ing-conv" hidden></div>
       ${original}
     </div>
   `;
@@ -414,13 +460,114 @@ function openRecipeForm(draft, { recipe = null, issues = [], imported = false } 
     const name = normalizeIngredientText(splitIngredientAlternatives(e.target.value).primary);
     const known = getKnownIngredients().find(item => normalizeIngredientText(item.name) === name);
     const unitSelect = row?.querySelector('.rc-ing-unit');
-    if (known && unitSelect && UNITS.includes(known.unit)) unitSelect.value = known.unit;
+    // Não troca se a pessoa escolheu xícara/colher
+    const isHome = HOME_UNITS.some(u => u.key === unitSelect?.value);
+    if (known && unitSelect && !isHome && UNITS.includes(known.unit)) unitSelect.value = known.unit;
   });
 
+  qs('#rc_ings')?.addEventListener('change', (e) => updateConversionHint(e.target.closest('.rc-ing-row')));
   qs('#rc_ings')?.addEventListener('input', (e) => {
-    e.target.closest('.rc-ing-row')?.classList.remove('rc-missing');
+    const row = e.target.closest('.rc-ing-row');
+    row?.classList.remove('rc-missing');
+    updateConversionHint(row);
   });
   qs('#rc_name')?.addEventListener('input', (e) => e.target.classList.remove('rc-input-missing'));
+}
+
+// Mostra embaixo da linha quanto a xícara/colher vai virar ao salvar
+function updateConversionHint(row) {
+  const hint = row?.querySelector('.rc-ing-conv');
+  if (!hint) return;
+
+  const unit = row.querySelector('.rc-ing-unit').value;
+  const qty = parseQty(row.querySelector('.rc-ing-qty').value);
+  const name = row.querySelector('.rc-ing-name').value.trim();
+  const isHome = HOME_UNITS.some(u => u.key === unit);
+
+  if (!isHome || !name || qty <= 0) {
+    hint.hidden = true;
+    return;
+  }
+
+  const converted = convertHomeMeasure(name, qty, unit);
+  hint.textContent = converted
+    ? `≈ ${formatQty(converted.qty)} ${converted.unit} (valor aproximado)`
+    : 'O peso será calculado pela IA ao salvar';
+  hint.hidden = false;
+}
+
+// Troca xícaras/colheres por g ou ml antes de salvar.
+// O que não está na tabela é perguntado à IA (um único pedido para todos).
+async function convertHomeMeasureRows() {
+  const pending = [];
+
+  document.querySelectorAll('#rc_ings .rc-ing-row').forEach(row => {
+    const unitSelect = row.querySelector('.rc-ing-unit');
+    const home = HOME_UNITS.find(u => u.key === unitSelect.value);
+    const qtyInput = row.querySelector('.rc-ing-qty');
+    const name = row.querySelector('.rc-ing-name').value.trim();
+    const qty = parseQty(qtyInput.value);
+    if (!home || !name || qty <= 0) return;
+
+    const written = `${qtyInput.value.trim()} ${home.label} de ${splitIngredientAlternatives(name).primary}`;
+    const converted = convertHomeMeasure(name, qty, home.key);
+    if (converted) {
+      applyConversion(row, converted, written);
+    } else {
+      pending.push({ row, written, name: splitIngredientAlternatives(name).primary });
+    }
+  });
+
+  if (pending.length === 0) return true;
+
+  const saveBtn = qs('[data-rc="save"]');
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Calculando medidas...';
+  }
+
+  try {
+    const receita = await requestRecipe({
+      texto: `Converta cada medida para g ou ml. Mantenha o nome de cada ingrediente:\n${pending.map(p => `- ${p.written}`).join('\n')}`
+    });
+    const results = receita.ingredientes || [];
+
+    pending.forEach((item, index) => {
+      const key = normalizeIngredientText(item.name);
+      const found = results.find(r => normalizeIngredientText(r.nome) === key) || results[index];
+      if (found && Number(found.qtd) > 0 && ['g', 'ml'].includes(found.unidade)) {
+        applyConversion(item.row, { qty: Math.round(found.qtd), unit: found.unidade }, item.written);
+      }
+    });
+  } catch {
+    // Sem servidor: a pessoa preenche em g/ml
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = editingRecipe ? 'Salvar alterações' : 'Salvar receita';
+    }
+  }
+
+  const failed = pending.filter(item => HOME_UNITS.some(u => u.key === item.row.querySelector('.rc-ing-unit').value));
+  if (failed.length > 0) {
+    failed.forEach(item => item.row.classList.add('rc-missing'));
+    showFormMessage([`Não consegui calcular o peso de: ${failed.map(f => f.name).join(', ')}. Escreva em g ou ml, ou tente salvar de novo.`]);
+    return false;
+  }
+  return true;
+}
+
+function applyConversion(row, converted, written) {
+  row.querySelector('.rc-ing-qty').value = formatQty(converted.qty);
+  row.querySelector('.rc-ing-unit').value = converted.unit;
+  row.querySelector('.rc-ing-conv').hidden = true;
+  let original = row.querySelector('.rc-ing-original');
+  if (!original) {
+    original = document.createElement('div');
+    original.className = 'rc-ing-original';
+    row.appendChild(original);
+  }
+  original.textContent = `Você escreveu: ${written}`;
 }
 
 function updateChipStates() {
@@ -455,7 +602,19 @@ function showFormMessage(problems) {
   if (problems.length) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-function saveRecipeFromForm() {
+let saving = false;
+
+async function saveRecipeFromForm() {
+  if (saving) return;
+  saving = true;
+  try {
+    if (await convertHomeMeasureRows()) saveConvertedForm();
+  } finally {
+    saving = false;
+  }
+}
+
+function saveConvertedForm() {
   const problems = [];
   const nameInput = qs('#rc_name');
   const name = nameInput.value.trim().toLowerCase().replace(/^\w/, c => c.toUpperCase());
