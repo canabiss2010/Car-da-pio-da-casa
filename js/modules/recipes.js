@@ -66,7 +66,7 @@ function convertHomeMeasure(name, qty, unitKey) {
   const key = normalizeIngredientText(splitIngredientAlternatives(name).primary);
   const match = home && CUP_WEIGHTS.find(([word]) => key.includes(word));
   if (!match) return null;
-  return { qty: Math.round(match[1] * home.perCup * qty), unit: match[2] };
+  return { qty: roundMeasure(match[1] * home.perCup * qty), unit: match[2] };
 }
 
 // Receita aberta no formulário (null = nova receita)
@@ -123,6 +123,15 @@ function formatQty(qty) {
   const value = Number(qty);
   if (!Number.isFinite(value)) return '';
   return String(Math.round(value * 1000) / 1000).replace('.', ',');
+}
+
+// Arredonda medidas convertidas para números fáceis: 16,83 g -> 17 g; 243 g -> 245 g; 2,37 g -> 2,5 g
+function roundMeasure(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  if (n < 10) return Math.max(0.5, Math.round(n * 2) / 2);
+  if (n < 100) return Math.round(n);
+  return Math.round(n / 5) * 5;
 }
 
 // Aceita "2", "0,5", "1/2" e "1 1/2"
@@ -370,8 +379,9 @@ function deleteRecipe(recipe) {
 
 function ingredientRowHtml(ing = {}) {
   const unit = UNITS.includes(ing.unit) ? ing.unit : 'g';
-  const original = ing.original && normalizeIngredientText(ing.original) !== normalizeIngredientText(ing.name)
-    ? `<div class="rc-ing-original">Na receita: "${escapeHtml(ing.original)}"</div>`
+  // Só explica de onde veio quando o mesmo ingrediente foi somado de partes diferentes
+  const original = ing.original && ing.original.includes(' + ')
+    ? `<div class="rc-ing-original">Somado: ${escapeHtml(ing.original)}</div>`
     : '';
 
   return `
@@ -536,7 +546,7 @@ async function convertHomeMeasureRows() {
       const key = normalizeIngredientText(item.name);
       const found = results.find(r => normalizeIngredientText(r.nome) === key) || results[index];
       if (found && Number(found.qtd) > 0 && ['g', 'ml'].includes(found.unidade)) {
-        applyConversion(item.row, { qty: Math.round(found.qtd), unit: found.unidade }, item.written);
+        applyConversion(item.row, { qty: roundMeasure(found.qtd), unit: found.unidade }, item.written);
       }
     });
   } catch {
@@ -790,7 +800,7 @@ function importedToDraft(receita, fromPhoto) {
     const hasQty = Number(item.qtd) > 0 && UNITS.includes(item.unidade);
     return {
       name,
-      qty: hasQty ? item.qtd : '',
+      qty: hasQty ? roundMeasure(item.qtd) : '',
       unit: hasQty ? item.unidade : 'g',
       original: item.original || '',
       missing: !hasQty
@@ -811,7 +821,7 @@ function importedToDraft(receita, fromPhoto) {
 
   const homeMeasure = /x[ií]cara|colher|copo|lata|caixinha|pitada|punhado|ma[cç]o/i;
   if (ingredients.some(ing => !ing.missing && homeMeasure.test(ing.original))) {
-    issues.push('Medidas como xícara e colher foram convertidas para g/ml (valor aproximado). O texto original aparece embaixo de cada ingrediente.');
+    issues.push('Medidas como xícara e colher foram convertidas para g/ml (valor aproximado). Pode corrigir o número se quiser.');
   }
 
   if (receita.observacao) {
