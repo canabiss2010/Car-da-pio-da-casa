@@ -524,7 +524,7 @@ TEXTO:
 """
 ${texto}
 """`
-        : 'A(s) foto(s) mostram uma receita (livro, caderno escrito à mão, print). Se forem várias, são partes da mesma receita.';
+        : 'A(s) foto(s) mostram receita(s) (livro, caderno escrito à mão, print). Várias fotos podem ser partes da mesma receita ou receitas diferentes.';
 
     return `Você cadastra receitas num app brasileiro de cardápio da família.
 ${fonte}
@@ -534,7 +534,10 @@ A receita pode ter várias partes (massa, recheio, cobertura, calda, molho): inc
 Se o mesmo ingrediente aparece em mais de uma parte, junte num só item SOMANDO as quantidades,
 e no "original" coloque os trechos separados por " + " (ex: "1 xícara de chocolate em pó (massa) + 4 colheres de sopa de chocolate em pó (cobertura)").
 
-Devolva:
+Pode haver MAIS DE UMA receita (ex: duas receitas na mesma página, ou a pessoa ditou duas). Separe cada uma em um objeto próprio, sem misturar ingredientes.
+Partes da MESMA receita (massa, recheio, cobertura, molho do próprio prato) NÃO são receitas separadas.
+
+Para CADA receita devolva:
 - "receita": false se não houver uma receita (ex: foto de outra coisa, texto sem ingredientes). Senão true.
 - "nome": nome da receita, ou null se não aparecer.
 - "porcoes": número de porções/pessoas que rende, ou null se não estiver escrito.
@@ -556,8 +559,8 @@ Devolva:
 INGREDIENTES QUE O APP JÁ CONHECE (nome e unidade):
 ${formatKnownIngredients(knownIngredients) || '(nenhum)'}
 
-Responda só com JSON neste formato:
-{"receita":true,"nome":"...","porcoes":4,"ingredientes":[{"nome":"...","alternativas":[],"qtd":200,"unidade":"g","original":"..."}],"macros":["carbo"],"observacao":null}`;
+Responda só com JSON neste formato (uma entrada em "receitas" para cada receita encontrada):
+{"receitas":[{"receita":true,"nome":"...","porcoes":4,"ingredientes":[{"nome":"...","alternativas":[],"qtd":200,"unidade":"g","original":"..."}],"macros":["carbo"],"observacao":null}]}`;
 }
 
 function sanitizeRecipe(result) {
@@ -626,9 +629,14 @@ app.post('/ler-receita', async (req, res) => {
         }
 
         const result = await callGemini(buildRecipePrompt(knownIngredients, images.length ? '' : text), images, 60000);
-        const receita = sanitizeRecipe(result);
+        // Aceita o formato novo ({receitas:[...]}) e o antigo (uma receita só)
+        const receitas = (Array.isArray(result?.receitas) ? result.receitas : [result])
+            .slice(0, 10)
+            .map(sanitizeRecipe)
+            .filter((r) => r.receita && r.ingredientes.length);
+        const receita = receitas[0];
 
-        if (!receita.receita || !receita.ingredientes.length) {
+        if (!receita) {
             return res.status(422).json({
                 sucesso: false,
                 erro: images.length
@@ -637,7 +645,8 @@ app.post('/ler-receita', async (req, res) => {
             });
         }
 
-        return res.json({ sucesso: true, receita });
+        // "receita" continua para versões antigas do app
+        return res.json({ sucesso: true, receita, receitas });
     } catch (error) {
         console.error('Erro ao ler receita:', error?.response?.status || '', error?.message);
         const status = error?.response?.status;
